@@ -10,3 +10,5 @@ my_farm_photos/
 *.txt
 firebase-key.json
 .env
+*.pt
+.env*.local
