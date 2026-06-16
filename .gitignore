@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+dataset/
+dataset_*/
+runs/
+uploads/
+my_farm_photos/
+*.jpg
+*.png
+*.txt
+firebase-key.json
+.env

@@ -1,0 +1,9 @@
+path: C:/Users/user/chanchobi-app/ai-server/dataset_disease
+
+train: images/train
+val: images/val
+
+nc: 2
+names:
+  0: 정상
+  1: 병해충

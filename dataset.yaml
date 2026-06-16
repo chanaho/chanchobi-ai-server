@@ -1,0 +1,17 @@
+path: C:/Users/user/chanchobi-app/ai-server/my_farm_photos
+
+train: .
+val: .
+
+names:
+  0: 사과
+  1: 자두
+  2: 아로니아
+  3: 블루베리
+  4: 체리
+  5: 복숭아
+  6: 대추
+  7: 고추
+  8: 토마토
+  9: 오이
+  10: 포도

@@ -1,0 +1,12 @@
+path: C:/Users/user/chanchobi-app/ai-server/dataset_crop
+
+train: images/train
+val: images/val
+
+nc: 5
+names:
+  0: 사과
+  1: 자두
+  2: 블루베리
+  3: 복숭아
+  4: 대추
