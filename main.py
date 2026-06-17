@@ -1,4 +1,7 @@
 import os
+import numpy as np
+import cv2
+
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 
@@ -9,6 +12,9 @@ print("WORKDIR:", os.getcwd())
 app = FastAPI()
 
 
+# =========================
+# ROOT
+# =========================
 @app.get("/")
 def root():
     return {
@@ -17,6 +23,9 @@ def root():
     }
 
 
+# =========================
+# HEALTH
+# =========================
 @app.get("/health")
 def health():
     return {
@@ -24,6 +33,9 @@ def health():
     }
 
 
+# =========================
+# SIMPLE MOCK AI
+# =========================
 def run_ai(selected_crop):
     return {
         "ai_crop": selected_crop,
@@ -35,6 +47,18 @@ def run_ai(selected_crop):
     }
 
 
+# =========================
+# PREPROCESS
+# =========================
+def preprocess(img):
+    if img is None:
+        return None
+    return cv2.resize(img, (640, 640))
+
+
+# =========================
+# PREDICT
+# =========================
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
@@ -42,7 +66,18 @@ async def predict(
     farm: str = Form("unknown")
 ):
     try:
-        await file.read()
+        contents = await file.read()
+
+        np_arr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "image decode failed"}
+            )
+
+        img = preprocess(img)
 
         result = run_ai(selected_crop)
 
