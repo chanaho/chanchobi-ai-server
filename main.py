@@ -11,6 +11,8 @@ print("WORKDIR:", os.getcwd())
 
 app = FastAPI()
 
+print("🔥 APP CREATED SUCCESS")
+
 
 # =========================
 # ROOT
