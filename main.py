@@ -1,8 +1,11 @@
 import os
+import numpy as np
+import cv2
 
 print("🔥 MAIN START")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import JSONResponse
 
 print("🔥 BEFORE APP")
 
