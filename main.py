@@ -1,17 +1,14 @@
 import os
-import numpy as np
-import cv2
 
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import JSONResponse
+print("🔥 MAIN START")
 
-print("MAIN LOADED")
-print("FILE:", __file__)
-print("WORKDIR:", os.getcwd())
+from fastapi import FastAPI
+
+print("🔥 BEFORE APP")
 
 app = FastAPI()
 
-print("🔥 APP CREATED SUCCESS")
+print("🔥 AFTER APP")
 
 
 # =========================
