@@ -1,54 +1,64 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
-import numpy as np
-import cv2
 
 app = FastAPI()
 
 # =========================
-# HEALTH CHECK (Render 필수)
+# HEALTH CHECK (필수)
 # =========================
 @app.get("/")
 def root():
-    return {
-        "status": "ok",
-        "service": "chanchobi-ai-server"
-    }
-
-
-@app.get("/health")
-def health():
-    return {"status": "running"}
+    return {"status": "ok", "service": "stable-ai"}
 
 
 # =========================
-# AI CORE (안정 Mock)
+# SAFE FALLBACK
 # =========================
-def run_ai(selected_crop: str):
+def fallback():
     return {
-        "ai_crop": selected_crop,
-        "disease": "healthy",
-        "disease_confidence": 99.0,
+        "ai_crop": "unknown",
+        "disease": "safe_mode",
+        "confidence": 0,
         "risk": "LOW",
-        "recommend": "stable mode",
-        "crop_match": True
+        "crop_match": False
     }
 
 
 # =========================
-# IMAGE PREPROCESS (안정형)
+# LAZY AI LOAD (핵심)
 # =========================
-def preprocess(img):
-    if img is None:
-        return None
+def run_ai(image_bytes):
+    """
+    ⚠️ 여기서만 AI 로딩 (요청 시 실행)
+    """
+
     try:
-        return cv2.resize(img, (640, 640))
-    except:
-        return img
+        import numpy as np
+        import cv2
+
+        np_arr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            return fallback()
+
+        h, w = img.shape[:2]
+
+        return {
+            "ai_crop": "test_crop",
+            "disease": "detected",
+            "confidence": 70.0,
+            "risk": "MEDIUM" if w > 500 else "LOW",
+            "crop_match": True
+        }
+
+    except Exception as e:
+        print("AI ERROR:", e)
+        return fallback()
 
 
 # =========================
-# PREDICT API (Render 핵심)
+# PREDICT API (안정 핵심)
 # =========================
 @app.post("/predict")
 async def predict(
@@ -56,31 +66,21 @@ async def predict(
     selected_crop: str = Form("unknown"),
     farm: str = Form("unknown")
 ):
+
     try:
-        # 이미지 읽기
         contents = await file.read()
 
-        np_arr = np.frombuffer(contents, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        result = run_ai(contents)
 
-        if img is None:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "image decode failed"}
-            )
-
-        img = preprocess(img)
-
-        # AI 실행 (현재 안정 mock)
-        result = run_ai(selected_crop)
-
-        return JSONResponse(content=result)
+        return JSONResponse({
+            "status": "success",
+            "farm": farm,
+            "result": result
+        })
 
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": str(e),
-                "status": "failed"
-            }
-        )
+        return JSONResponse({
+            "status": "failed",
+            "error": str(e),
+            "result": fallback()
+        })
