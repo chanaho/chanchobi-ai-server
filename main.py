@@ -1,7 +1,20 @@
-from fastapi import FastAPI, UploadFile, File, Form
+import os
+import numpy as np
+import cv2
+
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 
+# =========================
+# TEST BOOT STRAP (여기 위치 중요)
+# =========================
+print("🔥 MAIN START")
+from fastapi import FastAPI
+print("🔥 BEFORE APP")
+
 app = FastAPI()
+
+print("🔥 AFTER APP")
 
 # =========================
 # HEALTH CHECK (필수)
