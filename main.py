@@ -5,6 +5,8 @@ from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from ultralytics import YOLO
 
+model = YOLO("best.pt")
+
 print("🚀 AI SERVER START")
 
 app = FastAPI()
@@ -42,34 +44,36 @@ def fallback():
 # AI INFERENCE
 # =========================
 def run_ai(image_bytes):
+
     try:
+        import numpy as np
+        import cv2
+
         np_arr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if img is None:
             return fallback()
 
-        model = get_model()
+        # 🔥 YOLO 직접 사용 (핵심)
         results = model(img)
 
-        r = results[0]
+        if results and len(results) > 0:
+            r = results[0]
 
-        if r.probs is None:
-            return fallback()
+            if r.boxes and len(r.boxes) > 0:
+                cls = int(r.boxes.cls[0])
+                conf = float(r.boxes.conf[0])
 
-        top1 = int(r.probs.top1)
-        conf = float(r.probs.top1conf)
+                return {
+                    "ai_crop": "test_crop",
+                    "disease": model.names.get(cls, "unknown"),
+                    "confidence": round(conf * 100, 2),
+                    "risk": "HIGH" if conf > 0.7 else "MEDIUM",
+                    "crop_match": True
+                }
 
-        disease_name = model.names[top1]
-        crop = disease_name.split("_")[0]
-
-        return {
-            "ai_crop": crop,
-            "disease": disease_name,
-            "confidence": round(conf * 100, 2),
-            "risk": "HIGH" if conf > 0.85 else "MEDIUM" if conf > 0.6 else "LOW",
-            "crop_match": True
-        }
+        return fallback()
 
     except Exception as e:
         print("AI ERROR:", e)
