@@ -88,6 +88,11 @@ async def predict(
 
     try:
         contents = await file.read()
+
+        # 🚨 LOG 추가 (Render에서 보임)
+        print("🔥 FILE NAME:", file.filename)
+        print("🔥 FILE SIZE:", len(contents))
+
         result = run_ai(contents)
 
         return JSONResponse({
@@ -97,6 +102,8 @@ async def predict(
         })
 
     except Exception as e:
+        print("❌ ERROR:", e)
+
         return JSONResponse({
             "status": "failed",
             "error": str(e),
