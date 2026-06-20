@@ -49,37 +49,25 @@ def run_ai(image_bytes):
         if img is None:
             return fallback()
 
+        model = get_model()
         results = model(img)
 
         r = results[0]
 
-        # =========================
-        # CLASSIFICATION ONLY SAFE
-        # =========================
-        if hasattr(r, "probs") and r.probs is not None:
-            top1 = int(r.probs.top1)
-            conf = float(r.probs.top1conf)
-
-            disease_name = model.names[top1]
-
-        else:
-            # ❗ detection fallback (안 쓰는 경우 안전 처리)
+        if r.probs is None:
             return fallback()
 
-        crop = disease_name.split("_")[0] if "_" in disease_name else "unknown"
+        top1 = int(r.probs.top1)
+        conf = float(r.probs.top1conf)
 
-        if conf > 0.85:
-            risk = "HIGH"
-        elif conf > 0.6:
-            risk = "MEDIUM"
-        else:
-            risk = "LOW"
+        disease_name = model.names[top1]
+        crop = disease_name.split("_")[0]
 
         return {
             "ai_crop": crop,
             "disease": disease_name,
             "confidence": round(conf * 100, 2),
-            "risk": risk,
+            "risk": "HIGH" if conf > 0.85 else "MEDIUM" if conf > 0.6 else "LOW",
             "crop_match": True
         }
 
