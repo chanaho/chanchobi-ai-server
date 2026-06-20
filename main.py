@@ -1,24 +1,3 @@
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import JSONResponse
-from ultralytics import YOLO
-
-print("🚀 AI SERVER START")
-
-app = FastAPI()
-
-# =========================
-# MODEL LOAD (딱 1번만)
-# =========================
-model = YOLO("best.pt")
-
-print("✅ YOLO MODEL LOADED")
-
-
-@app.get("/")
-def root():
-    return {"status": "ok"}
-
-
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
@@ -28,18 +7,46 @@ async def predict(
     try:
         contents = await file.read()
 
+        import numpy as np
+        import cv2
+
+        np_arr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            return {"status": "failed", "error": "image decode failed"}
+
+        # 🔥 YOLO 실제 실행
+        results = model(img)
+
+        r = results[0]
+
+        if r.boxes and len(r.boxes) > 0:
+            cls = int(r.boxes.cls[0])
+            conf = float(r.boxes.conf[0])
+
+            return {
+                "status": "success",
+                "farm": farm,
+                "result": {
+                    "disease": model.names.get(cls, "unknown"),
+                    "confidence": round(conf * 100, 2),
+                    "risk": "HIGH" if conf > 0.7 else "MEDIUM"
+                }
+            }
+
         return {
             "status": "success",
             "farm": farm,
             "result": {
-                "disease": "test",
-                "confidence": 50,
+                "disease": "no_detection",
+                "confidence": 0,
                 "risk": "LOW"
             }
         }
 
     except Exception as e:
-        return JSONResponse({
+        return {
             "status": "failed",
             "error": str(e)
-        })
+        }
