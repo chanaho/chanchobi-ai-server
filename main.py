@@ -1,31 +1,32 @@
 import os
 import numpy as np
 import cv2
-
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
+from ultralytics import YOLO
 
-# =========================
-# TEST BOOT STRAP (여기 위치 중요)
-# =========================
-print("🔥 MAIN START")
-from fastapi import FastAPI
-print("🔥 BEFORE APP")
+print("🚀 AI SERVER START")
 
 app = FastAPI()
 
-print("🔥 AFTER APP")
+# =========================
+# MODEL LOAD (핵심)
+# =========================
+model = YOLO("best.pt")
+
+print("✅ YOLO MODEL LOADED")
+
 
 # =========================
-# HEALTH CHECK (필수)
+# HEALTH CHECK
 # =========================
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "stable-ai"}
+    return {"status": "ok", "service": "chanchobi-ai"}
 
 
 # =========================
-# SAFE FALLBACK
+# FALLBACK
 # =========================
 def fallback():
     return {
@@ -38,30 +39,42 @@ def fallback():
 
 
 # =========================
-# LAZY AI LOAD (핵심)
+# AI INFERENCE
 # =========================
 def run_ai(image_bytes):
-    """
-    ⚠️ 여기서만 AI 로딩 (요청 시 실행)
-    """
-
     try:
-        import numpy as np
-        import cv2
-
         np_arr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if img is None:
             return fallback()
 
-        h, w = img.shape[:2]
+        # YOLO inference
+        results = model(img)
+
+        # classification 결과
+        probs = results[0].probs
+        top1 = int(probs.top1)
+        conf = float(probs.top1conf)
+
+        disease_name = model.names[top1]
+
+        # crop extract
+        crop = disease_name.split("_")[0] if "_" in disease_name else "unknown"
+
+        # risk logic
+        if conf > 0.85:
+            risk = "HIGH"
+        elif conf > 0.6:
+            risk = "MEDIUM"
+        else:
+            risk = "LOW"
 
         return {
-            "ai_crop": "test_crop",
-            "disease": "detected",
-            "confidence": 70.0,
-            "risk": "MEDIUM" if w > 500 else "LOW",
+            "ai_crop": crop,
+            "disease": disease_name,
+            "confidence": round(conf * 100, 2),
+            "risk": risk,
             "crop_match": True
         }
 
@@ -71,7 +84,7 @@ def run_ai(image_bytes):
 
 
 # =========================
-# PREDICT API (안정 핵심)
+# PREDICT API
 # =========================
 @app.post("/predict")
 async def predict(
@@ -82,7 +95,6 @@ async def predict(
 
     try:
         contents = await file.read()
-
         result = run_ai(contents)
 
         return JSONResponse({
