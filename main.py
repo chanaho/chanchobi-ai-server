@@ -49,20 +49,25 @@ def run_ai(image_bytes):
         if img is None:
             return fallback()
 
-        # YOLO inference
         results = model(img)
 
-        # classification 결과
-        probs = results[0].probs
-        top1 = int(probs.top1)
-        conf = float(probs.top1conf)
+        r = results[0]
 
-        disease_name = model.names[top1]
+        # =========================
+        # CLASSIFICATION ONLY SAFE
+        # =========================
+        if hasattr(r, "probs") and r.probs is not None:
+            top1 = int(r.probs.top1)
+            conf = float(r.probs.top1conf)
 
-        # crop extract
+            disease_name = model.names[top1]
+
+        else:
+            # ❗ detection fallback (안 쓰는 경우 안전 처리)
+            return fallback()
+
         crop = disease_name.split("_")[0] if "_" in disease_name else "unknown"
 
-        # risk logic
         if conf > 0.85:
             risk = "HIGH"
         elif conf > 0.6:
