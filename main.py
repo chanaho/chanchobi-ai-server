@@ -1,3 +1,35 @@
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import JSONResponse
+from ultralytics import YOLO
+import numpy as np
+import cv2
+
+# =========================
+# APP 먼저 생성 (핵심)
+# =========================
+app = FastAPI()
+
+print("🚀 AI SERVER START")
+
+# =========================
+# YOLO LOAD
+# =========================
+model = YOLO("best.pt")
+
+print("✅ YOLO MODEL LOADED")
+
+
+# =========================
+# ROOT TEST
+# =========================
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
+
+# =========================
+# PREDICT API
+# =========================
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
@@ -7,18 +39,13 @@ async def predict(
     try:
         contents = await file.read()
 
-        import numpy as np
-        import cv2
-
         np_arr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         if img is None:
             return {"status": "failed", "error": "image decode failed"}
 
-        # 🔥 YOLO 실제 실행
         results = model(img)
-
         r = results[0]
 
         if r.boxes and len(r.boxes) > 0:
@@ -46,7 +73,7 @@ async def predict(
         }
 
     except Exception as e:
-        return {
+        return JSONResponse({
             "status": "failed",
             "error": str(e)
-        }
+        })
