@@ -73,7 +73,9 @@ async def predict(
         }
 
     except Exception as e:
-        return JSONResponse({
-            "status": "failed",
-            "error": str(e)
-        })
+    print("🔥 PREDICT ERROR:", e)
+
+    return JSONResponse({
+        "status": "failed",
+        "error": str(e)
+    })
