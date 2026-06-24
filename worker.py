@@ -1,30 +1,47 @@
+import os
+import time
+import json
 import base64
 import requests
-from PIL import Image
 import io
+from dotenv import load_dotenv
+from PIL import Image
 from ultralytics import YOLO
 
 # ==========================
-# ☁️ UPSTASH REDIS (REST)
+# 🌱 LOAD ENV (가장 먼저!)
+# ==========================
+load_dotenv()
+
+# ==========================
+# ☁️ UPSTASH CONFIG
 # ==========================
 UPSTASH_URL = os.getenv("UPSTASH_REDIS_REST_URL")
 UPSTASH_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+
+HEADERS = {
+    "Authorization": f"Bearer {UPSTASH_TOKEN}"
+}
 
 # ==========================
 # 🤖 YOLO MODEL LOAD
 # ==========================
 model = YOLO("best.pt")
 
-print("🔥 WORKER STARTED - AI READY")
+print("🔥 WORKER STARTED - AI ENGINE READY")
 
 
 # ==========================
 # 🖼️ IMAGE DECODE
 # ==========================
 def decode_image(image_b64):
-    image_bytes = base64.b64decode(image_b64)
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    return image
+    try:
+        image_bytes = base64.b64decode(image_b64)
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        return image
+    except Exception as e:
+        print("❌ IMAGE DECODE ERROR:", e)
+        return None
 
 
 # ==========================
@@ -63,39 +80,37 @@ def run_yolo(image):
 
 
 # ==========================
-# 🔥 GET TASK (QUEUE POP)
+# 📥 POP TASK (QUEUE)
 # ==========================
 def pop_task():
-    url = f"{UPSTASH_URL}/brpop/ai_queue/0"
+    try:
+        url = f"{UPSTASH_URL}/brpop/ai_queue/0"
+        res = requests.get(url, headers=HEADERS, timeout=30)
 
-    headers = {
-        "Authorization": f"Bearer {UPSTASH_TOKEN}"
-    }
+        data = res.json()
+        result = data.get("result")
 
-    res = requests.get(url, headers=headers)
-    data = res.json()
+        if not result:
+            return None
 
-    result = data.get("result")
+        task_json = result[1]
+        return json.loads(task_json)
 
-    if not result:
+    except Exception as e:
+        print("❌ POP ERROR:", e)
         return None
 
-    # Upstash format: [queue_name, value]
-    task_json = result[1]
-    return json.loads(task_json)
-
 
 # ==========================
-# 📦 SAVE RESULT
+# 💾 SAVE RESULT
 # ==========================
 def save_result(task_id, result):
-    url = f"{UPSTASH_URL}/set/result:{task_id}/{json.dumps(result)}"
+    try:
+        url = f"{UPSTASH_URL}/set/result:{task_id}/{json.dumps(result)}"
+        requests.post(url, headers=HEADERS, timeout=30)
 
-    headers = {
-        "Authorization": f"Bearer {UPSTASH_TOKEN}"
-    }
-
-    requests.post(url, headers=headers)
+    except Exception as e:
+        print("❌ SAVE ERROR:", e)
 
 
 # ==========================
@@ -109,17 +124,29 @@ while True:
             time.sleep(1)
             continue
 
-        task_id = task["task_id"]
-        print("🔥 PROCESS:", task_id)
+        task_id = task.get("task_id")
+        image_b64 = task.get("image")
 
-        image = decode_image(task["image"])
+        print("🔥 PROCESS TASK:", task_id)
+
+        image = decode_image(image_b64)
+
+        if image is None:
+            save_result(task_id, {
+                "status": "error",
+                "message": "image decode failed"
+            })
+            continue
+
         result = run_yolo(image)
 
         final_result = {
             "status": "done",
+            "task_id": task_id,
             "result": result,
             "farm": task.get("farm"),
-            "crop": task.get("crop")
+            "crop": task.get("crop"),
+            "timestamp": time.time()
         }
 
         save_result(task_id, final_result)
@@ -127,5 +154,5 @@ while True:
         print("✅ DONE:", task_id)
 
     except Exception as e:
-        print("🔥 WORKER ERROR:", str(e))
+        print("🔥 WORKER CRASH:", str(e))
         time.sleep(2)

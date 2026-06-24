@@ -1,15 +1,13 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-import uuid
-import json
-import base64
-import os
-import requests
+from ultralytics import YOLO
+from PIL import Image
+import io
 
 app = FastAPI()
 
 # ==========================
-# 🌐 CORS
+# CORS
 # ==========================
 app.add_middleware(
     CORSMiddleware,
@@ -20,102 +18,167 @@ app.add_middleware(
 )
 
 # ==========================
-# ☁️ UPSTASH REDIS (REST)
-# ==========================
-UPSTASH_URL = os.getenv("UPSTASH_REDIS_REST_URL")
-UPSTASH_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
-
-
-# ==========================
-# 🤖 MODEL SAFE LOAD (핵심 추가)
+# MODEL LOAD (안정화)
 # ==========================
 model = None
-model_loaded = False
 
 try:
-    # YOLO or AI 모델 로드
-    from ultralytics import YOLO
     model = YOLO("best.pt")
-    model_loaded = True
     print("🔥 MODEL LOADED SUCCESS")
 except Exception as e:
-    model = None
-    model_loaded = False
     print("❌ MODEL LOAD FAILED:", e)
 
+# ==========================
+# 농약 + 방제 DB
+# ==========================
+DISEASE_DB = {
+    "anthracnose": {
+        "name": "탄저병",
+        "risk": "HIGH",
+        "chemical": [
+            "아족시스트로빈 계열",
+            "디페노코나졸 계열",
+            "프로피코나졸 계열",
+        ],
+        "rotation": "교호살포 필수 (같은 계열 연속 금지)",
+        "note": "저항성 발생 매우 높음",
+        "warning": "고온기 약해 가능",
+    },
+
+    "scab": {
+        "name": "갈색무늬병/반점병",
+        "risk": "MEDIUM",
+        "chemical": [
+            "카벤다짐",
+            "테부코나졸",
+            "트리플록시스트로빈",
+        ],
+        "rotation": "계통 교호살포 권장",
+        "note": "강우 후 즉시 방제 필요",
+        "warning": "과다 살포 시 잎 황화",
+    },
+
+    "aphid": {
+        "name": "진딧물",
+        "risk": "LOW",
+        "chemical": [
+            "이미다클로프리드",
+            "아세타미프리드",
+        ],
+        "rotation": "2회 이상 연속 사용 금지",
+        "note": "초기 방제가 핵심",
+        "warning": "꿀벌 피해 주의",
+    },
+}
 
 # ==========================
-# 🔥 UPSTASH PUSH
+# AI RESULT → 농업 의사결정
 # ==========================
-def push_queue(task):
-    try:
-        url = f"{UPSTASH_URL}/lpush/ai_queue/{json.dumps(task)}"
+def interpret_result(label: str):
+    data = DISEASE_DB.get(label.lower())
 
-        headers = {
-            "Authorization": f"Bearer {UPSTASH_TOKEN}"
+    if not data:
+        return {
+            "disease": label,
+            "risk": "UNKNOWN",
+            "chemical": ["등록 약제 확인 필요"],
+            "rotation": "정보 없음",
+            "note": "AI 추가 학습 필요",
+            "warning": "정밀 진단 권장",
         }
 
-        res = requests.post(url, headers=headers)
-
-        print("🔥 UPSTASH PUSH:", res.status_code)
-
-        return res.json()
-
-    except Exception as e:
-        print("🔥 PUSH ERROR:", e)
-        return None
-
+    return {
+        "disease": data["name"],
+        "risk": data["risk"],
+        "chemical": data["chemical"],
+        "rotation": data["rotation"],
+        "note": data["note"],
+        "warning": data["warning"],
+    }
 
 # ==========================
-# 🚀 HEALTH CHECK
+# HEALTH CHECK
 # ==========================
 @app.get("/")
 def root():
     return {
         "status": "ok",
-        "service": "ai-api-server",
-        "model_loaded": model_loaded
+        "service": "pest-ai-complete",
+        "model_loaded": model is not None,
     }
 
-
 # ==========================
-# 🚀 PREDICT (SAFE QUEUE ONLY)
+# MAIN ANALYSIS
 # ==========================
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
     selected_crop: str = Form("unknown"),
-    farm: str = Form("unknown")
+    farm: str = Form("unknown"),
 ):
-
     try:
-        task_id = str(uuid.uuid4())
+        if model is None:
+            return {
+                "status": "error",
+                "message": "AI 모델 미로드",
+            }
 
         image_bytes = await file.read()
 
         if not image_bytes:
             return {
                 "status": "error",
-                "message": "empty image"
+                "message": "empty image",
             }
 
-        image_b64 = base64.b64encode(image_bytes).decode()
+        image = Image.open(
+            io.BytesIO(image_bytes)
+        ).convert("RGB")
 
-        task = {
-            "task_id": task_id,
-            "image": image_b64,
-            "farm": farm,
-            "crop": selected_crop
-        }
+        results = model(image)
 
-        push_queue(task)
+        boxes = results[0].boxes
 
-        print("🔥 QUEUED:", task_id)
+        # 병해 미검출
+        if boxes is None or len(boxes) == 0:
+            return {
+                "status": "success",
+                "farm": farm,
+                "ai_crop": selected_crop,
+                "disease": "정상",
+                "confidence": 0,
+                "risk": "LOW",
+                "chemical": [],
+                "rotation": "",
+                "note": "병해충 미검출",
+                "warning": "",
+            }
+
+        # 최고 신뢰도 결과
+        box = boxes[0]
+
+        cls = int(box.cls[0])
+        label = model.names[cls]
+
+        confidence = round(
+            float(box.conf[0]) * 100,
+            1,
+        )
+
+        decision = interpret_result(label)
 
         return {
-            "status": "queued",
-            "task_id": task_id,
-            "model_loaded": model_loaded   # 🔥 중요: 상태 확인용
+            "status": "success",
+            "farm": farm,
+            "ai_crop": selected_crop,
+            "disease": decision["disease"],
+            "confidence": confidence,
+            "risk": decision["risk"],
+            "chemical": decision["chemical"],
+            "rotation": decision["rotation"],
+            "note": decision["note"],
+            "warning": decision["warning"],
+            "ai_label": label,
         }
 
     except Exception as e:
@@ -123,39 +186,5 @@ async def predict(
 
         return {
             "status": "error",
-            "message": str(e)
-        }
-
-
-# ==========================
-# 📦 RESULT CHECK
-# ==========================
-@app.get("/result/{task_id}")
-def get_result(task_id: str):
-
-    try:
-        url = f"{UPSTASH_URL}/get/result:{task_id}"
-
-        headers = {
-            "Authorization": f"Bearer {UPSTASH_TOKEN}"
-        }
-
-        res = requests.get(url, headers=headers)
-
-        data = res.json()
-
-        result = data.get("result")
-
-        if not result:
-            return {
-                "status": "processing",
-                "task_id": task_id
-            }
-
-        return json.loads(result)
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
+            "message": str(e),
         }
