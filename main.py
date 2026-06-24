@@ -135,9 +135,29 @@ async def predict(
             io.BytesIO(image_bytes)
         ).convert("RGB")
 
-        results = model(image)
+        print("🔥 PREDICT START")
+
+        try:
+            print("🔥 START YOLO")
+
+            results = model(image)
+
+            print("🔥 YOLO FINISHED")
+
+        except Exception as e:
+            print("🔥 YOLO ERROR:", str(e))
+
+            return {
+                "status": "error",
+                "message": f"YOLO inference failed: {str(e)}"
+            }
 
         boxes = results[0].boxes
+
+        print(
+            "🔥 BOX COUNT:",
+            0 if boxes is None else len(boxes)
+        )
 
         # 병해 미검출
         if boxes is None or len(boxes) == 0:
