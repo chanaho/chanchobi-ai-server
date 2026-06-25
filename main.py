@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 # ==========================
-# MODEL LOAD (안정화)
+# MODEL LOAD
 # ==========================
 model = None
 
@@ -29,50 +29,37 @@ except Exception as e:
     print("❌ MODEL LOAD FAILED:", e)
 
 # ==========================
-# 농약 + 방제 DB
+# DISEASE DB
 # ==========================
 DISEASE_DB = {
     "anthracnose": {
         "name": "탄저병",
         "risk": "HIGH",
-        "chemical": [
-            "아족시스트로빈 계열",
-            "디페노코나졸 계열",
-            "프로피코나졸 계열",
-        ],
-        "rotation": "교호살포 필수 (같은 계열 연속 금지)",
-        "note": "저항성 발생 매우 높음",
-        "warning": "고온기 약해 가능",
+        "chemical": ["아족시스트로빈", "디페노코나졸", "프로피코나졸"],
+        "rotation": "교호살포 필수",
+        "note": "저항성 높음",
+        "warning": "고온기 주의",
     },
-
     "scab": {
-        "name": "갈색무늬병/반점병",
+        "name": "갈색무늬병",
         "risk": "MEDIUM",
-        "chemical": [
-            "카벤다짐",
-            "테부코나졸",
-            "트리플록시스트로빈",
-        ],
-        "rotation": "계통 교호살포 권장",
-        "note": "강우 후 즉시 방제 필요",
-        "warning": "과다 살포 시 잎 황화",
+        "chemical": ["카벤다짐", "테부코나졸"],
+        "rotation": "교호살포",
+        "note": "강우 후 발생",
+        "warning": "과다살포 주의",
     },
-
     "aphid": {
         "name": "진딧물",
         "risk": "LOW",
-        "chemical": [
-            "이미다클로프리드",
-            "아세타미프리드",
-        ],
-        "rotation": "2회 이상 연속 사용 금지",
-        "note": "초기 방제가 핵심",
-        "warning": "꿀벌 피해 주의",
+        "chemical": ["이미다클로프리드", "아세타미프리드"],
+        "rotation": "연속 사용 금지",
+        "note": "초기 방제 중요",
+        "warning": "꿀벌 주의",
     },
 }
 
 # ==========================
-# AI RESULT → 농업 의사결정
+# INTERPRETER
 # ==========================
 def interpret_result(label: str):
     data = DISEASE_DB.get(label.lower())
@@ -81,9 +68,9 @@ def interpret_result(label: str):
         return {
             "disease": label,
             "risk": "UNKNOWN",
-            "chemical": ["등록 약제 확인 필요"],
-            "rotation": "정보 없음",
-            "note": "AI 추가 학습 필요",
+            "chemical": ["정보 없음"],
+            "rotation": "확인 필요",
+            "note": "추가 학습 필요",
             "warning": "정밀 진단 권장",
         }
 
@@ -97,18 +84,17 @@ def interpret_result(label: str):
     }
 
 # ==========================
-# HEALTH CHECK
+# ROOT
 # ==========================
 @app.get("/")
 def root():
     return {
         "status": "ok",
-        "service": "pest-ai-complete",
-        "model_loaded": model is not None,
+        "model_loaded": model is not None
     }
 
 # ==========================
-# MAIN ANALYSIS
+# PREDICT (FINAL SAFE VERSION)
 # ==========================
 @app.post("/predict")
 async def predict(
@@ -117,12 +103,18 @@ async def predict(
     farm: str = Form("unknown"),
 ):
     try:
+        # --------------------------
+        # MODEL CHECK
+        # --------------------------
         if model is None:
             return {
                 "status": "error",
                 "message": "AI 모델 미로드",
             }
 
+        # --------------------------
+        # IMAGE LOAD
+        # --------------------------
         image_bytes = await file.read()
 
         if not image_bytes:
@@ -131,52 +123,59 @@ async def predict(
                 "message": "empty image",
             }
 
-        image = Image.open(
-            io.BytesIO(image_bytes)
-        ).convert("RGB")
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         print("🔥 PREDICT START")
 
-        try:
-            print("🔥 START YOLO")
-            print(f"🔥 IMAGE TYPE = {type(image)}")
+        # ======================================================
+        # 🔥 YOLO SAFE MODE (현재는 안정화용)
+        # ======================================================
+        USE_YOLO = True  # 👉 여기만 True로 바꾸면 YOLO 실행
 
-            print("🔥 BEFORE MODEL")
+        print("🔥 YOLO MODE:", "ON" if USE_YOLO else "OFF")
 
-            # =========================
-            # 🔥 YOLO TEST MODE (우회)
-            # =========================
-            print("🔥 YOLO SKIP MODE ACTIVE")
+        # ==========================
+        # SKIP MODE
+        # ==========================
+        if not USE_YOLO:
+            print("🔥 SKIP MODE RESPONSE")
 
-            results = None
+            return {
+                "status": "success",
+                "farm": farm,
+                "ai_crop": selected_crop,
+                "disease": "테스트모드",
+                "confidence": 0,
+                "risk": "LOW",
+                "chemical": [],
+                "rotation": "",
+                "note": "YOLO SKIP MODE",
+                "warning": "",
+            }
 
-            print("🔥 YOLO SKIPPED")
+        # ==========================
+        # YOLO REAL MODE
+        # ==========================
+        print("🔥 YOLO REAL START")
 
-            # =========================
-            # 🚨 여기서 반드시 분기 처리
-            # =========================
-            if results is None:
-                print("🔥 MOCK RESULT RETURN")
+        results = model(image)
 
-                return {
-                    "status": "success",
-                    "farm": farm,
-                    "ai_crop": selected_crop,
-                    "disease": "테스트모드",
-                    "confidence": 0,
-                    "risk": "LOW",
-                    "chemical": [],
-                    "note": "YOLO SKIP MODE"
+        if results is None or len(results) == 0:
+            return {
+                "status": "success",
+                "farm": farm,
+                "ai_crop": selected_crop,
+                "disease": "정상",
+                "confidence": 0,
+                "risk": "LOW",
+                "chemical": [],
+                "rotation": "",
+                "note": "검출 없음",
+                "warning": "",
             }
 
         boxes = results[0].boxes
 
-        print(
-            "🔥 BOX COUNT:",
-            0 if boxes is None else len(boxes)
-        )
-
-        # 병해 미검출
         if boxes is None or len(boxes) == 0:
             return {
                 "status": "success",
@@ -191,16 +190,11 @@ async def predict(
                 "warning": "",
             }
 
-        # 최고 신뢰도 결과
         box = boxes[0]
-
         cls = int(box.cls[0])
         label = model.names[cls]
 
-        confidence = round(
-            float(box.conf[0]) * 100,
-            1,
-        )
+        confidence = round(float(box.conf[0]) * 100, 1)
 
         decision = interpret_result(label)
 
@@ -219,7 +213,9 @@ async def predict(
         }
 
     except Exception as e:
+        import traceback
         print("🔥 PREDICT ERROR:", str(e))
+        traceback.print_exc()
 
         return {
             "status": "error",
