@@ -130,7 +130,7 @@ async def predict(
         # ======================================================
         # 🔥 YOLO SAFE MODE (현재는 안정화용)
         # ======================================================
-        USE_YOLO = True  # 👉 여기만 True로 바꾸면 YOLO 실행
+        USE_YOLO = False  # 👉 여기만 True로 바꾸면 YOLO 실행
 
         print("🔥 YOLO MODE:", "ON" if USE_YOLO else "OFF")
 
