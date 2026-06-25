@@ -148,19 +148,25 @@ async def predict(
             # =========================
             print("🔥 YOLO SKIP MODE ACTIVE")
 
-            results = None  # YOLO 완전 우회
+            results = None
 
             print("🔥 YOLO SKIPPED")
 
-        except Exception as e:
-            import traceback
+            # =========================
+            # 🚨 여기서 반드시 분기 처리
+            # =========================
+            if results is None:
+                print("🔥 MOCK RESULT RETURN")
 
-            print("🔥 YOLO ERROR:", str(e))
-            traceback.print_exc()
-
-            return {
-                "status": "error",
-                "message": f"YOLO inference failed: {str(e)}"
+                return {
+                    "status": "success",
+                    "farm": farm,
+                    "ai_crop": selected_crop,
+                    "disease": "테스트모드",
+                    "confidence": 0,
+                    "risk": "LOW",
+                    "chemical": [],
+                    "note": "YOLO SKIP MODE"
             }
 
         boxes = results[0].boxes
