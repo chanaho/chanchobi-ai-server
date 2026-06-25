@@ -145,10 +145,11 @@ async def predict(
 
             results = model(image)
 
-            print("🔥 AFTER MODEL")
-            print(f"🔥 RESULTS TYPE = {type(results)}")
+            print("🔥 YOLO SKIP TEST START")
+            results = None  # YOLO 완전 우회
 
-            print("🔥 YOLO FINISHED")
+
+            print("🔥 YOLO SKIPPED")
 
         except Exception as e:
             import traceback
