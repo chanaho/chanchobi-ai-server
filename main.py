@@ -139,13 +139,24 @@ async def predict(
 
         try:
             print("🔥 START YOLO")
+            print(f"🔥 IMAGE TYPE = {type(image)}")
+
+            print("🔥 BEFORE MODEL")
 
             results = model(image)
+
+            print("🔥 AFTER MODEL")
+            print(f"🔥 RESULTS TYPE = {type(results)}")
 
             print("🔥 YOLO FINISHED")
 
         except Exception as e:
+            import traceback
+
             print("🔥 YOLO ERROR:", str(e))
+            traceback.print_exc()
+
+            raise e
 
             return {
                 "status": "error",
