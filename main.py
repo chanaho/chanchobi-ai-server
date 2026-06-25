@@ -158,7 +158,11 @@ async def predict(
         # ==========================
         print("🔥 YOLO REAL START")
 
+        print("🔥 BEFORE MODEL")
+
         results = model(image)
+
+        print("🔥 AFTER MODEL")
 
         if results is None or len(results) == 0:
             return {
