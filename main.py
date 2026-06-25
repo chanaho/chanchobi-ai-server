@@ -167,7 +167,7 @@ async def predict(
         results = model(
             image,
             imgsz=320,
-            verbose=True
+            verbose=True,
             device="cpu"
         )
 
