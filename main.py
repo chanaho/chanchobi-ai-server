@@ -158,9 +158,14 @@ async def predict(
         # ==========================
         print("🔥 YOLO REAL START")
 
+        print("🔥 IMAGE SIZE =", image.size)
+
         print("🔥 BEFORE MODEL")
 
-        results = model(image)
+        results = model(
+            image,
+            verbose=True
+        )
 
         print("🔥 AFTER MODEL")
 
