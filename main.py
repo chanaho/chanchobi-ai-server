@@ -143,11 +143,12 @@ async def predict(
 
             print("🔥 BEFORE MODEL")
 
-            results = model(image)
+            # =========================
+            # 🔥 YOLO TEST MODE (우회)
+            # =========================
+            print("🔥 YOLO SKIP MODE ACTIVE")
 
-            print("🔥 YOLO SKIP TEST START")
             results = None  # YOLO 완전 우회
-
 
             print("🔥 YOLO SKIPPED")
 
@@ -156,8 +157,6 @@ async def predict(
 
             print("🔥 YOLO ERROR:", str(e))
             traceback.print_exc()
-
-            raise e
 
             return {
                 "status": "error",
