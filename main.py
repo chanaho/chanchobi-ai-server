@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 from PIL import Image
 import io
+import os
+import gc
+import torch
 import asyncio
 
 app = FastAPI()
@@ -26,6 +29,9 @@ lock = asyncio.Lock()
 # ==========================
 # MODEL LOAD
 # ==========================
+
+os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
+
 try:
     model = YOLO("best.pt")
     print("🔥 MODEL LOADED SUCCESS")
@@ -140,10 +146,10 @@ async def predict(
         try:
             results = model.predict(
                 source=image,
-                imgsz=416,
+                imgsz=320,
                 conf=0.30,
                 iou=0.50,
-                max_det=5,
+                max_det=3,
                 device="cpu",
                 verbose=False,
             )
