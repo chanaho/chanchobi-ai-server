@@ -114,19 +114,21 @@ async def predict(
     farm: str = Form("unknown"),
 ):
 
-    # 🔥 1. 동시 요청 차단 (핵심)
     async with lock:
 
-        # ==========================
+        print("===== PREDICT REQUEST =====")
+        print("farm =", farm)
+        print("crop =", selected_crop)
+        print("filename =", file.filename)
+
         # MODEL CHECK
-        # ==========================
         if model is None:
             return {"status": "error", "message": "AI 모델 미로드"}
 
-        # ==========================
         # IMAGE LOAD
-        # ==========================
         image_bytes = await file.read()
+
+        print("image size =", len(image_bytes))
 
         if not image_bytes:
             return {"status": "error", "message": "empty image"}
@@ -134,30 +136,35 @@ async def predict(
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         except Exception as e:
-            return {"status": "error", "message": f"image decode error: {str(e)}"}
+            return {
+                "status": "error",
+                "message": f"image decode error: {str(e)}"
+            }
 
         image.thumbnail((512, 512))
 
         print("🔥 PREDICT START")
 
-        # ==========================
-        # YOLO RUN (SAFE)
-        # ==========================
+        # YOLO RUN
         try:
-            results = model.predict(
-                source=image,
-                imgsz=320,
-                conf=0.30,
-                iou=0.50,
-                max_det=3,
-                device="cpu",
-                verbose=False,
-            )
+            with torch.inference_mode():
+                results = model.predict(
+                    source=image,
+                    imgsz=320,
+                    conf=0.30,
+                    iou=0.50,
+                    max_det=3,
+                    device="cpu",
+                    verbose=False,
+                )
+
+            print("YOLO finished")
 
         except Exception as e:
+            print("YOLO ERROR =", str(e))
             return {
                 "status": "error",
-                "message": "YOLO inference failed safely"
+                "message": str(e)
             }
 
         # ==========================
