@@ -107,7 +107,6 @@ async def predict(
         return {"status": "error", "message": "AI 모델 미로드"}
 
     image_bytes = await file.read()
-
     if not image_bytes:
         return {"status": "error", "message": "empty image"}
 
@@ -116,66 +115,66 @@ async def predict(
     except Exception as e:
         return {"status": "error", "message": f"image decode error: {str(e)}"}
 
-    image.thumbnail((1024, 1024))
+    image.thumbnail((512, 512))  # 🔥 최종 안정 크기
 
-    print("")
-    print("🔥 =========================")
     print("🔥 PREDICT START")
-    print("🔥 IMAGE SIZE:", image.size)
 
     # ==========================
-    # YOLO RUN
+    # YOLO SAFE MODE (FINAL)
     # ==========================
     try:
         results = model.predict(
             source=image,
-            imgsz=640,
-            conf=0.25,
-            iou=0.45,
-            max_det=10,
+            imgsz=416,        # 🔥 최종 안정값
+            conf=0.30,
+            iou=0.50,
+            max_det=5,        # 🔥 과부하 방지
             device="cpu",
             verbose=False,
         )
 
-        print("🔥 YOLO FINISHED")
-
     except Exception as e:
-        import traceback
-        print("🔥 YOLO ERROR:", str(e))
-        traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+        print("🔥 YOLO CRASH:", str(e))
+        return {
+            "status": "error",
+            "message": "YOLO inference failed safely"
+        }
 
     # ==========================
-    # RESULT CHECK
+    # RESULT SAFE CHECK
     # ==========================
     if not results or len(results) == 0:
-        print("❌ NO RESULTS")
-        return {"status": "success", "disease": "정상", "confidence": 0}
+        return {
+            "status": "success",
+            "farm": farm,
+            "ai_crop": selected_crop,
+            "disease": "정상",
+            "confidence": 0,
+            "risk": "LOW",
+            "chemical": [],
+            "rotation": "",
+            "note": "검출 없음",
+            "warning": "",
+        }
 
     r = results[0]
 
-    print("🔥 RESULT TYPE:", type(r))
-
-    if r.boxes is None:
-        print("❌ NO BOXES")
-        return {"status": "success", "disease": "정상", "confidence": 0}
-
-    print("🔥 BOX COUNT:", len(r.boxes))
-
-    # ==========================
-    # BOX DEBUG LOOP
-    # ==========================
-    for i, box in enumerate(r.boxes):
-        cls = int(box.cls[0])
-        conf = float(box.conf[0])
-        label = model.names[cls]
-
-        print("🔥 BOX", i)
-        print("   LABEL:", label)
-        print("   CONF:", round(conf * 100, 2))
+    if r.boxes is None or len(r.boxes) == 0:
+        return {
+            "status": "success",
+            "farm": farm,
+            "ai_crop": selected_crop,
+            "disease": "정상",
+            "confidence": 0,
+            "risk": "LOW",
+            "chemical": [],
+            "rotation": "",
+            "note": "병해충 미검출",
+            "warning": "",
+        }
 
     # ==========================
-    # TOP RESULT
+    # TOP RESULT ONLY
     # ==========================
     box = r.boxes[0]
 
@@ -185,8 +184,7 @@ async def predict(
 
     decision = interpret_result(label)
 
-    print("🔥 FINAL LABEL:", label)
-    print("🔥 FINAL CONF:", confidence)
+    print("🔥 FINAL RESULT:", label, confidence)
 
     return {
         "status": "success",
