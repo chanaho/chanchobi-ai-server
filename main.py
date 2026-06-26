@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 from PIL import Image
 import io
-import traceback
+import asyncio
 
 app = FastAPI()
 
@@ -17,6 +17,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==========================
+# 🔥 핵심: 요청 1개씩 처리 (502 방지)
+# ==========================
+lock = asyncio.Lock()
 
 # ==========================
 # MODEL LOAD
@@ -94,7 +99,7 @@ def root():
     }
 
 # ==========================
-# PREDICT (STEP1 STABLE)
+# PREDICT (FINAL FIXED)
 # ==========================
 @app.post("/predict")
 async def predict(
@@ -103,99 +108,108 @@ async def predict(
     farm: str = Form("unknown"),
 ):
 
-    if model is None:
-        return {"status": "error", "message": "AI 모델 미로드"}
+    # 🔥 1. 동시 요청 차단 (핵심)
+    async with lock:
 
-    image_bytes = await file.read()
-    if not image_bytes:
-        return {"status": "error", "message": "empty image"}
+        # ==========================
+        # MODEL CHECK
+        # ==========================
+        if model is None:
+            return {"status": "error", "message": "AI 모델 미로드"}
 
-    try:
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    except Exception as e:
-        return {"status": "error", "message": f"image decode error: {str(e)}"}
+        # ==========================
+        # IMAGE LOAD
+        # ==========================
+        image_bytes = await file.read()
 
-    image.thumbnail((512, 512))  # 🔥 최종 안정 크기
+        if not image_bytes:
+            return {"status": "error", "message": "empty image"}
 
-    print("🔥 PREDICT START")
+        try:
+            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        except Exception as e:
+            return {"status": "error", "message": f"image decode error: {str(e)}"}
 
-    # ==========================
-    # YOLO SAFE MODE (FINAL)
-    # ==========================
-    try:
-        results = model.predict(
-            source=image,
-            imgsz=416,        # 🔥 최종 안정값
-            conf=0.30,
-            iou=0.50,
-            max_det=5,        # 🔥 과부하 방지
-            device="cpu",
-            verbose=False,
-        )
+        image.thumbnail((512, 512))
 
-    except Exception as e:
-        print("🔥 YOLO CRASH:", str(e))
-        return {
-            "status": "error",
-            "message": "YOLO inference failed safely"
-        }
+        print("🔥 PREDICT START")
 
-    # ==========================
-    # RESULT SAFE CHECK
-    # ==========================
-    if not results or len(results) == 0:
+        # ==========================
+        # YOLO RUN (SAFE)
+        # ==========================
+        try:
+            results = model.predict(
+                source=image,
+                imgsz=416,
+                conf=0.30,
+                iou=0.50,
+                max_det=5,
+                device="cpu",
+                verbose=False,
+            )
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": "YOLO inference failed safely"
+            }
+
+        # ==========================
+        # RESULT CHECK
+        # ==========================
+        if not results or len(results) == 0:
+            return {
+                "status": "success",
+                "farm": farm,
+                "ai_crop": selected_crop,
+                "disease": "정상",
+                "confidence": 0,
+                "risk": "LOW",
+                "chemical": [],
+                "rotation": "",
+                "note": "검출 없음",
+                "warning": "",
+            }
+
+        r = results[0]
+
+        if r.boxes is None or len(r.boxes) == 0:
+            return {
+                "status": "success",
+                "farm": farm,
+                "ai_crop": selected_crop,
+                "disease": "정상",
+                "confidence": 0,
+                "risk": "LOW",
+                "chemical": [],
+                "rotation": "",
+                "note": "병해충 미검출",
+                "warning": "",
+            }
+
+        # ==========================
+        # TOP RESULT
+        # ==========================
+        box = r.boxes[0]
+
+        cls = int(box.cls[0])
+        label = model.names[cls]
+        confidence = round(float(box.conf[0]) * 100, 1)
+
+        decision = interpret_result(label)
+
+        print("🔥 FINAL RESULT:", label, confidence)
+
         return {
             "status": "success",
             "farm": farm,
             "ai_crop": selected_crop,
-            "disease": "정상",
-            "confidence": 0,
-            "risk": "LOW",
-            "chemical": [],
-            "rotation": "",
-            "note": "검출 없음",
-            "warning": "",
+            "disease": decision["disease"],
+            "confidence": confidence,
+            "risk": decision["risk"],
+            "chemical": decision["chemical"],
+            "rotation": decision["rotation"],
+            "note": decision["note"],
+            "warning": decision["warning"],
+            "ai_label": label,
         }
-
-    r = results[0]
-
-    if r.boxes is None or len(r.boxes) == 0:
-        return {
-            "status": "success",
-            "farm": farm,
-            "ai_crop": selected_crop,
-            "disease": "정상",
-            "confidence": 0,
-            "risk": "LOW",
-            "chemical": [],
-            "rotation": "",
-            "note": "병해충 미검출",
-            "warning": "",
-        }
-
-    # ==========================
-    # TOP RESULT ONLY
-    # ==========================
-    box = r.boxes[0]
-
-    cls = int(box.cls[0])
-    label = model.names[cls]
-    confidence = round(float(box.conf[0]) * 100, 1)
-
-    decision = interpret_result(label)
-
-    print("🔥 FINAL RESULT:", label, confidence)
-
-    return {
-        "status": "success",
-        "farm": farm,
-        "ai_crop": selected_crop,
-        "disease": decision["disease"],
-        "confidence": confidence,
-        "risk": decision["risk"],
-        "chemical": decision["chemical"],
-        "rotation": decision["rotation"],
-        "note": decision["note"],
-        "warning": decision["warning"],
-        "ai_label": label,
-    }
