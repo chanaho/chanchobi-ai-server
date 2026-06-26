@@ -124,6 +124,7 @@ async def predict(
             }
 
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image.thumbnail((1024, 1024))
 
         print("🔥 PREDICT START")
 
@@ -157,22 +158,59 @@ async def predict(
         # YOLO REAL MODE
         # ==========================
         print("🔥 YOLO REAL START")
-
         print("🔥 IMAGE SIZE =", image.size)
 
-        image = image.resize((640, 640))
+        # 원본 비율 유지하면서 최대 640으로 축소
+        image.thumbnail((640, 640))
 
+        print("🔥 IMAGE RESIZED =", image.size)
+        print("🔥 MODEL TYPE =", type(model))
         print("🔥 BEFORE MODEL")
 
-        results = model(
-            image,
-            imgsz=320,
-            verbose=True,
-            device="cpu"
-        )
+        try:
+            print("🔥 START PREDICT")
 
-        print("🔥 AFTER MODEL")
+            results = model.predict(
+                source=image,
+                imgsz=640,
+                conf=0.25,
+                iou=0.45,
+                max_det=10,
+                augment=False,
+                half=False,
+                device="cpu",
+                verbose=False,
+            )
 
+            print("🔥 AFTER MODEL")
+            print("🔥 RESULT TYPE =", type(results))
+            print("🔥 RESULT LENGTH =", len(results) if results else 0)
+
+        except Exception as e:
+            import traceback
+
+            print("🔥 YOLO ERROR =", str(e))
+            traceback.print_exc()
+
+            return {
+                "status": "error",
+                "message": f"YOLO ERROR: {str(e)}",
+            }
+
+        except Exception as e:
+            import traceback
+
+            print("🔥 YOLO ERROR:", str(e))
+            traceback.print_exc()
+
+            return {
+                "status": "error",
+                "message": f"YOLO ERROR: {str(e)}",
+            }
+
+        # ==========================
+        # 결과 없음
+        # ==========================
         if results is None or len(results) == 0:
             return {
                 "status": "success",
@@ -189,6 +227,9 @@ async def predict(
 
         boxes = results[0].boxes
 
+        # ==========================
+        # 박스 없음
+        # ==========================
         if boxes is None or len(boxes) == 0:
             return {
                 "status": "success",
@@ -203,7 +244,11 @@ async def predict(
                 "warning": "",
             }
 
+        # ==========================
+        # 최고 신뢰도 결과
+        # ==========================
         box = boxes[0]
+
         cls = int(box.cls[0])
         label = model.names[cls]
 
@@ -223,14 +268,4 @@ async def predict(
             "note": decision["note"],
             "warning": decision["warning"],
             "ai_label": label,
-        }
-
-    except Exception as e:
-        import traceback
-        print("🔥 PREDICT ERROR:", str(e))
-        traceback.print_exc()
-
-        return {
-            "status": "error",
-            "message": str(e),
         }
