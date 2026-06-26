@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 from PIL import Image
 import io
+import traceback
 
 app = FastAPI()
 
@@ -20,12 +21,11 @@ app.add_middleware(
 # ==========================
 # MODEL LOAD
 # ==========================
-model = None
-
 try:
     model = YOLO("best.pt")
     print("🔥 MODEL LOADED SUCCESS")
 except Exception as e:
+    model = None
     print("❌ MODEL LOAD FAILED:", e)
 
 # ==========================
@@ -94,7 +94,7 @@ def root():
     }
 
 # ==========================
-# PREDICT (FINAL SAFE VERSION)
+# PREDICT (STEP1 STABLE)
 # ==========================
 @app.post("/predict")
 async def predict(
@@ -102,170 +102,102 @@ async def predict(
     selected_crop: str = Form("unknown"),
     farm: str = Form("unknown"),
 ):
+
+    if model is None:
+        return {"status": "error", "message": "AI 모델 미로드"}
+
+    image_bytes = await file.read()
+
+    if not image_bytes:
+        return {"status": "error", "message": "empty image"}
+
     try:
-        # --------------------------
-        # MODEL CHECK
-        # --------------------------
-        if model is None:
-            return {
-                "status": "error",
-                "message": "AI 모델 미로드",
-            }
-
-        # --------------------------
-        # IMAGE LOAD
-        # --------------------------
-        image_bytes = await file.read()
-
-        if not image_bytes:
-            return {
-                "status": "error",
-                "message": "empty image",
-            }
-
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        image.thumbnail((1024, 1024))
+    except Exception as e:
+        return {"status": "error", "message": f"image decode error: {str(e)}"}
 
-        print("🔥 PREDICT START")
+    image.thumbnail((1024, 1024))
 
-        # ======================================================
-        # 🔥 YOLO SAFE MODE (현재는 안정화용)
-        # ======================================================
-        USE_YOLO = True  # 👉 여기만 True로 바꾸면 YOLO 실행
+    print("")
+    print("🔥 =========================")
+    print("🔥 PREDICT START")
+    print("🔥 IMAGE SIZE:", image.size)
 
-        print("🔥 YOLO MODE:", "ON" if USE_YOLO else "OFF")
+    # ==========================
+    # YOLO RUN
+    # ==========================
+    try:
+        results = model.predict(
+            source=image,
+            imgsz=640,
+            conf=0.25,
+            iou=0.45,
+            max_det=10,
+            device="cpu",
+            verbose=False,
+        )
 
-        # ==========================
-        # SKIP MODE
-        # ==========================
-        if not USE_YOLO:
-            print("🔥 SKIP MODE RESPONSE")
+        print("🔥 YOLO FINISHED")
 
-            return {
-                "status": "success",
-                "farm": farm,
-                "ai_crop": selected_crop,
-                "disease": "테스트모드",
-                "confidence": 0,
-                "risk": "LOW",
-                "chemical": [],
-                "rotation": "",
-                "note": "YOLO SKIP MODE",
-                "warning": "",
-            }
+    except Exception as e:
+        import traceback
+        print("🔥 YOLO ERROR:", str(e))
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
 
-        # ==========================
-        # YOLO REAL MODE
-        # ==========================
-        print("🔥 YOLO REAL START")
-        print("🔥 IMAGE SIZE =", image.size)
+    # ==========================
+    # RESULT CHECK
+    # ==========================
+    if not results or len(results) == 0:
+        print("❌ NO RESULTS")
+        return {"status": "success", "disease": "정상", "confidence": 0}
 
-        # 원본 비율 유지하면서 최대 640으로 축소
-        image.thumbnail((640, 640))
+    r = results[0]
 
-        print("🔥 IMAGE RESIZED =", image.size)
-        print("🔥 MODEL TYPE =", type(model))
-        print("🔥 BEFORE MODEL")
+    print("🔥 RESULT TYPE:", type(r))
 
-        try:
-            print("🔥 START PREDICT")
+    if r.boxes is None:
+        print("❌ NO BOXES")
+        return {"status": "success", "disease": "정상", "confidence": 0}
 
-            results = model.predict(
-                source=image,
-                imgsz=640,
-                conf=0.25,
-                iou=0.45,
-                max_det=10,
-                augment=False,
-                half=False,
-                device="cpu",
-                verbose=False,
-            )
+    print("🔥 BOX COUNT:", len(r.boxes))
 
-            print("🔥 AFTER MODEL")
-            print("🔥 RESULT TYPE =", type(results))
-            print("🔥 RESULT LENGTH =", len(results) if results else 0)
-
-        except Exception as e:
-            import traceback
-
-            print("🔥 YOLO ERROR =", str(e))
-            traceback.print_exc()
-
-            return {
-                "status": "error",
-                "message": f"YOLO ERROR: {str(e)}",
-            }
-
-        except Exception as e:
-            import traceback
-
-            print("🔥 YOLO ERROR:", str(e))
-            traceback.print_exc()
-
-            return {
-                "status": "error",
-                "message": f"YOLO ERROR: {str(e)}",
-            }
-
-        # ==========================
-        # 결과 없음
-        # ==========================
-        if results is None or len(results) == 0:
-            return {
-                "status": "success",
-                "farm": farm,
-                "ai_crop": selected_crop,
-                "disease": "정상",
-                "confidence": 0,
-                "risk": "LOW",
-                "chemical": [],
-                "rotation": "",
-                "note": "검출 없음",
-                "warning": "",
-            }
-
-        boxes = results[0].boxes
-
-        # ==========================
-        # 박스 없음
-        # ==========================
-        if boxes is None or len(boxes) == 0:
-            return {
-                "status": "success",
-                "farm": farm,
-                "ai_crop": selected_crop,
-                "disease": "정상",
-                "confidence": 0,
-                "risk": "LOW",
-                "chemical": [],
-                "rotation": "",
-                "note": "병해충 미검출",
-                "warning": "",
-            }
-
-        # ==========================
-        # 최고 신뢰도 결과
-        # ==========================
-        box = boxes[0]
-
+    # ==========================
+    # BOX DEBUG LOOP
+    # ==========================
+    for i, box in enumerate(r.boxes):
         cls = int(box.cls[0])
+        conf = float(box.conf[0])
         label = model.names[cls]
 
-        confidence = round(float(box.conf[0]) * 100, 1)
+        print("🔥 BOX", i)
+        print("   LABEL:", label)
+        print("   CONF:", round(conf * 100, 2))
 
-        decision = interpret_result(label)
+    # ==========================
+    # TOP RESULT
+    # ==========================
+    box = r.boxes[0]
 
-        return {
-            "status": "success",
-            "farm": farm,
-            "ai_crop": selected_crop,
-            "disease": decision["disease"],
-            "confidence": confidence,
-            "risk": decision["risk"],
-            "chemical": decision["chemical"],
-            "rotation": decision["rotation"],
-            "note": decision["note"],
-            "warning": decision["warning"],
-            "ai_label": label,
-        }
+    cls = int(box.cls[0])
+    label = model.names[cls]
+    confidence = round(float(box.conf[0]) * 100, 1)
+
+    decision = interpret_result(label)
+
+    print("🔥 FINAL LABEL:", label)
+    print("🔥 FINAL CONF:", confidence)
+
+    return {
+        "status": "success",
+        "farm": farm,
+        "ai_crop": selected_crop,
+        "disease": decision["disease"],
+        "confidence": confidence,
+        "risk": decision["risk"],
+        "chemical": decision["chemical"],
+        "rotation": decision["rotation"],
+        "note": decision["note"],
+        "warning": decision["warning"],
+        "ai_label": label,
+    }
