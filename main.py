@@ -4,15 +4,14 @@ from ultralytics import YOLO
 from PIL import Image
 import io
 import os
-import gc
 import torch
 import asyncio
 
 app = FastAPI()
 
-# ==========================
+# =========================
 # CORS
-# ==========================
+# =========================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,15 +20,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================
-# 🔥 핵심: 요청 1개씩 처리 (502 방지)
-# ==========================
+# =========================
+# LOCK (동시 요청 방지)
+# =========================
 lock = asyncio.Lock()
 
-# ==========================
+# =========================
 # MODEL LOAD
-# ==========================
-
+# =========================
 os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
 
 try:
@@ -39,39 +37,39 @@ except Exception as e:
     model = None
     print("❌ MODEL LOAD FAILED:", e)
 
-# ==========================
+# =========================
 # DISEASE DB
-# ==========================
+# =========================
 DISEASE_DB = {
     "anthracnose": {
         "name": "탄저병",
         "risk": "HIGH",
-        "chemical": ["아족시스트로빈", "디페노코나졸", "프로피코나졸"],
-        "rotation": "교호살포 필수",
-        "note": "저항성 높음",
-        "warning": "고온기 주의",
+        "chemical": ["아족시스트로빈", "디페노코나졸"],
+        "rotation": "교호살포",
+        "note": "고온다습 주의",
+        "warning": "확산 빠름",
     },
     "scab": {
         "name": "갈색무늬병",
         "risk": "MEDIUM",
-        "chemical": ["카벤다짐", "테부코나졸"],
+        "chemical": ["카벤다짐"],
         "rotation": "교호살포",
-        "note": "강우 후 발생",
-        "warning": "과다살포 주의",
+        "note": "강우 후 증가",
+        "warning": "관리 필요",
     },
     "aphid": {
         "name": "진딧물",
         "risk": "LOW",
-        "chemical": ["이미다클로프리드", "아세타미프리드"],
-        "rotation": "연속 사용 금지",
+        "chemical": ["이미다클로프리드"],
+        "rotation": "연속사용 금지",
         "note": "초기 방제 중요",
         "warning": "꿀벌 주의",
     },
 }
 
-# ==========================
+# =========================
 # INTERPRETER
-# ==========================
+# =========================
 def interpret_result(label: str):
     data = DISEASE_DB.get(label.lower())
 
@@ -79,7 +77,7 @@ def interpret_result(label: str):
         return {
             "disease": label,
             "risk": "UNKNOWN",
-            "chemical": ["정보 없음"],
+            "chemical": [],
             "rotation": "확인 필요",
             "note": "추가 학습 필요",
             "warning": "정밀 진단 권장",
@@ -94,19 +92,17 @@ def interpret_result(label: str):
         "warning": data["warning"],
     }
 
-# ==========================
+# =========================
 # ROOT
-# ==========================
+# =========================
 @app.get("/")
 def root():
-    return {
-        "status": "ok",
-        "model_loaded": model is not None
-    }
+    return {"status": "ok", "model_loaded": model is not None}
 
-# ==========================
-# PREDICT (FINAL FIXED)
-# ==========================
+
+# =========================
+# PREDICT
+# =========================
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
@@ -119,15 +115,11 @@ async def predict(
         print("===== PREDICT REQUEST =====")
         print("farm =", farm)
         print("crop =", selected_crop)
-        print("filename =", file.filename)
 
-        # MODEL CHECK
         if model is None:
-            return {"status": "error", "message": "AI 모델 미로드"}
+            return {"status": "error", "message": "model not loaded"}
 
-        # IMAGE LOAD
         image_bytes = await file.read()
-
         print("image size =", len(image_bytes))
 
         if not image_bytes:
@@ -136,16 +128,12 @@ async def predict(
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         except Exception as e:
-            return {
-                "status": "error",
-                "message": f"image decode error: {str(e)}"
-            }
+            return {"status": "error", "message": f"decode error: {e}"}
 
         image.thumbnail((512, 512))
 
         print("🔥 PREDICT START")
 
-        # YOLO RUN
         try:
             with torch.inference_mode():
                 results = model.predict(
@@ -159,31 +147,15 @@ async def predict(
                 )
 
             print("YOLO finished")
-
             print("results count =", len(results))
-
-            if len(results) > 0:
-
-                r = results[0]
-
-                 if r.boxes is None:
-
-                    print("boxes count = 0 (None)")
-
-                else:
-
-                    print("boxes count =", len(r.boxes))   
 
         except Exception as e:
             print("YOLO ERROR =", str(e))
-            return {
-                "status": "error",
-                "message": str(e)
-            }
+            return {"status": "error", "message": str(e)}
 
-        # ==========================
-        # RESULT CHECK
-        # ==========================
+        # =========================
+        # EMPTY RESULT
+        # =========================
         if not results or len(results) == 0:
             return {
                 "status": "success",
@@ -200,6 +172,9 @@ async def predict(
 
         r = results[0]
 
+        # =========================
+        # NO BOXES
+        # =========================
         if r.boxes is None or len(r.boxes) == 0:
             return {
                 "status": "success",
@@ -214,11 +189,10 @@ async def predict(
                 "warning": "",
             }
 
-        # ==========================
+        # =========================
         # TOP RESULT
-        # ==========================
+        # =========================
         box = r.boxes[0]
-
         cls = int(box.cls[0])
         label = model.names[cls]
         confidence = round(float(box.conf[0]) * 100, 1)
@@ -227,8 +201,6 @@ async def predict(
         print("confidence =", confidence)
 
         decision = interpret_result(label)
-
-        print("🔥 FINAL RESULT:", label, confidence)
 
         return {
             "status": "success",
