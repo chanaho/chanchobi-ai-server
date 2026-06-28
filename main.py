@@ -154,7 +154,9 @@ async def predict(
 
                 print("model classes:", model.names)
 
-                print("boxes:", r.boxes)                
+                print("boxes:", r.boxes)
+
+                print("image shape:", image.shape)                
             else:
                 print("no results")
 
