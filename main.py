@@ -139,15 +139,21 @@ async def predict(
                 results = model.predict(
                     source=image,
                     imgsz=320,
-                    conf=0.30,
+                    conf=0.05,
                     iou=0.50,
-                    max_det=3,
+                    max_det=10,
                     device="cpu",
                     verbose=False,
                 )
 
             print("YOLO finished")
             print("results count =", len(results))
+
+            r = results[0]
+
+            print("model classes:", model.names)
+
+            print("boxes:", r.boxes)
 
         except Exception as e:
             print("YOLO ERROR =", str(e))
