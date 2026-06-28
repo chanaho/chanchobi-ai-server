@@ -158,13 +158,7 @@ async def predict(
                     verbose=False,
                 )
 
-            print("YOLO finished")
-
-            print("results length =", len(results))
-
-            r = results[0]
-
-            print("boxes =", 0 if r.boxes is None else len(r.boxes))
+            print("YOLO finished")           
 
         except Exception as e:
             print("YOLO ERROR =", str(e))
