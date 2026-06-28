@@ -149,11 +149,14 @@ async def predict(
             print("YOLO finished")
             print("results count =", len(results))
 
-            r = results[0]
+            if len(results) > 0:
+                r = results[0]
 
-            print("model classes:", model.names)
+                print("model classes:", model.names)
 
-            print("boxes:", r.boxes)
+                print("boxes:", r.boxes)                
+            else:
+                print("no results")
 
         except Exception as e:
             print("YOLO ERROR =", str(e))
