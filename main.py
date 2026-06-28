@@ -160,6 +160,12 @@ async def predict(
 
             print("YOLO finished")
 
+             print("results length =", len(results))
+
+             r = results[0]
+
+             print("boxes =", 0 if r.boxes is None else len(r.boxes))
+
         except Exception as e:
             print("YOLO ERROR =", str(e))
             return {
@@ -208,6 +214,9 @@ async def predict(
         cls = int(box.cls[0])
         label = model.names[cls]
         confidence = round(float(box.conf[0]) * 100, 1)
+
+        print("label =", label)
+        print("confidence =", confidence)
 
         decision = interpret_result(label)
 
