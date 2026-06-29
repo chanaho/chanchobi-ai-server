@@ -30,6 +30,12 @@ lock = asyncio.Lock()
 # =========================
 os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
 
+print("CURRENT DIR =", os.getcwd())
+print("FILES =", os.listdir())
+
+MODEL_PATH = "best.pt"
+print("MODEL PATH =", os.path.abspath(MODEL_PATH))
+
 try:
     model = YOLO("best.pt")
     print("🔥 MODEL LOADED SUCCESS")
@@ -161,7 +167,7 @@ async def predict(
 
                 if r.boxes is not None and len(r.boxes) > 0:
                     print("conf:", r.boxes.conf)
-                     print("cls:", r.boxes.cls)                              
+                    print("cls:", r.boxes.cls)                              
             else:
                 print("NO DETECTIONS")
 
