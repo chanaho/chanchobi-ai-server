@@ -138,7 +138,7 @@ async def predict(
             with torch.inference_mode():
                 results = model.predict(
                     source=image,
-                    imgsz=320,
+                    imgsz=640,
                     conf=0.05,
                     iou=0.50,
                     max_det=10,
