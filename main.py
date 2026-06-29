@@ -37,7 +37,7 @@ MODEL_PATH = "best.pt"
 print("MODEL PATH =", os.path.abspath(MODEL_PATH))
 
 try:
-    model = YOLO("best.pt")
+    model = YOLO(MODEL_PATH)
     print("MODEL NAMES =", model.names)
     print("🔥 MODEL LOADED SUCCESS")
 except Exception as e:
