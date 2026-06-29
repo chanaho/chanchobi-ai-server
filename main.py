@@ -158,9 +158,8 @@ async def predict(
             print("image shape:", img.shape)
             print("model classes:", model.names)
 
+            if len(results) > 0:
                 r = results[0]
-
-                print("model classes:", model.names)
 
                 print("boxes:", r.boxes)
                 print("box count:", len(r.boxes) if r.boxes else 0)
@@ -168,8 +167,11 @@ async def predict(
                 if r.boxes is not None and len(r.boxes) > 0:
                     print("conf:", r.boxes.conf)
                     print("cls:", r.boxes.cls)                              
+                else:
+                    print("NO DETECTIONS")
+
             else:
-                print("NO DETECTIONS")
+                 print("NO RESULTS")
 
         except Exception as e:
             print("YOLO ERROR =", str(e))
