@@ -149,16 +149,21 @@ async def predict(
             print("YOLO finished")
             print("results count =", len(results))
 
-            if len(results) > 0:
+            print("image shape:", img.shape)
+            print("model classes:", model.names)
+
                 r = results[0]
 
                 print("model classes:", model.names)
 
                 print("boxes:", r.boxes)
+                print("box count:", len(r.boxes) if r.boxes else 0)
 
-                print("image size:", image.size)                
+                if r.boxes is not None and len(r.boxes) > 0:
+                    print("conf:", r.boxes.conf)
+                     print("cls:", r.boxes.cls)                              
             else:
-                print("no results")
+                print("NO DETECTIONS")
 
         except Exception as e:
             print("YOLO ERROR =", str(e))
