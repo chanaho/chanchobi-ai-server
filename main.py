@@ -156,7 +156,7 @@ async def predict(
 
                 print("boxes:", r.boxes)
 
-                print("image shape:", image.shape)                
+                print("image size:", image.size)                
             else:
                 print("no results")
 
