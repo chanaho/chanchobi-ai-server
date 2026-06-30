@@ -166,7 +166,7 @@ async def predict(
             print("YOLO finished")
             print("results count =", len(results))
 
-            print("image shape:", img.shape)
+            # print("image shape:", img.shape)
             print("model classes:", model.names)
 
             if len(results) > 0:
