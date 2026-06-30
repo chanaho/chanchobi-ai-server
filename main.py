@@ -5,6 +5,7 @@ from PIL import Image
 import io
 import os
 import torch
+import traceback
 import asyncio
 
 app = FastAPI()
@@ -183,10 +184,16 @@ async def predict(
 
             else:
                  print("NO RESULTS")
-
+        
         except Exception as e:
-            print("YOLO ERROR =", str(e))
-            return {"status": "error", "message": str(e)}
+            print("=" * 60)
+            traceback.print_exc()
+            print("=" * 60)
+
+            return {
+                "status": "error",
+                "message": str(e),
+            }
 
         # =========================
         # EMPTY RESULT
