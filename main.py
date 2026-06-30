@@ -34,16 +34,26 @@ print("CURRENT DIR =", os.getcwd())
 print("FILES =", os.listdir())
 
 MODEL_PATH = "best.pt"
+
+print("=" * 60)
 print("MODEL PATH =", os.path.abspath(MODEL_PATH))
 
 try:
     model = YOLO(MODEL_PATH)
-    print("MODEL NAMES =", model.names)
+
     print("🔥 MODEL LOADED SUCCESS")
+    print("MODEL TYPE =", type(model))
+    print("MODEL NAMES =", model.names)
+    print("NUMBER OF CLASSES =", len(model.names))
+
+    if hasattr(model, "task"):
+        print("MODEL TASK =", model.task)
+
 except Exception as e:
     model = None
-    print("❌ MODEL LOAD FAILED:", e)
+    print("❌ MODEL LOAD FAILED:", str(e))
 
+print("=" * 60)
 # =========================
 # DISEASE DB
 # =========================
