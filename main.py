@@ -15,13 +15,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "best.pt")
+# =========================
+# MODEL PATH
+# =========================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "model",
+    "best.pt"
+)
+
+print("===================================")
+print("MODEL PATH =", MODEL_PATH)
+print("MODEL EXISTS =", os.path.exists(MODEL_PATH))
+print("===================================")
 
 predictor = Predictor(MODEL_PATH)
 
+# =========================
+# ROOT
+# =========================
+
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "farm-ai"}
+    return {
+        "status": "ok",
+        "service": "farm-ai"
+    }
+
+# =========================
+# PREDICT
+# =========================
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
@@ -30,10 +56,10 @@ async def predict(file: UploadFile = File(...)):
 
         result = predictor.predict(image_bytes)
 
-        # =========================
-        # DB 저장 (런칭 핵심)
-        # =========================
-        log_result(result)
+        try:
+            log_result(result)
+        except Exception as e:
+            print("Firebase Log Error:", e)
 
         return {
             "status": "success",
@@ -41,6 +67,8 @@ async def predict(file: UploadFile = File(...)):
         }
 
     except Exception as e:
+        print(e)
+
         return {
             "status": "error",
             "message": str(e)
