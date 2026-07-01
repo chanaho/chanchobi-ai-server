@@ -12,3 +12,5 @@ numpy
 opencv-python-headless
 
 python-dotenv
+
+firebase-admin
