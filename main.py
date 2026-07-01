@@ -2,7 +2,7 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-from services.predictor import Predictor
+from services.ai_service import Predictor
 from services.firebase_logger import log_result
 
 app = FastAPI()
