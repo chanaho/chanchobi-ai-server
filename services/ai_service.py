@@ -3,6 +3,7 @@ from PIL import Image
 import torch
 import io
 import os
+import traceback
 
 
 class Predictor:
@@ -24,11 +25,17 @@ class Predictor:
 
         try:
 
+            print("===== AI Predict Start =====")
+
             image = Image.open(
                 io.BytesIO(image_bytes)
             ).convert("RGB")
 
+            print("✅ Image Loaded")
+
             with torch.inference_mode():
+
+                print("🚀 YOLO Predict Start")
 
                 results = self.model.predict(
                     source=image,
@@ -37,7 +44,11 @@ class Predictor:
                     verbose=False
                 )
 
+            print("✅ YOLO Predict Finished")
+
             if len(results) == 0:
+                print("⚠ No Results")
+
                 return {
                     "status": "success",
                     "crop": "unknown",
@@ -48,7 +59,12 @@ class Predictor:
 
             r = results[0]
 
+            print("Boxes =", r.boxes)
+
             if r.boxes is None or len(r.boxes) == 0:
+
+                print("⚠ No Boxes")
+
                 return {
                     "status": "success",
                     "crop": "unknown",
@@ -60,10 +76,12 @@ class Predictor:
             box = r.boxes[0]
 
             cls = int(box.cls[0])
-
             confidence = float(box.conf[0])
 
             disease = self.model.names[cls]
+
+            print("Prediction =", disease)
+            print("Confidence =", confidence)
 
             if confidence >= 0.85:
                 risk = "HIGH"
@@ -72,7 +90,7 @@ class Predictor:
             else:
                 risk = "LOW"
 
-            return {
+            result = {
                 "status": "success",
                 "crop": "unknown",
                 "disease": disease,
@@ -80,9 +98,18 @@ class Predictor:
                 "risk": risk
             }
 
+            print("===== RESULT =====")
+            print(result)
+            print("==================")
+
+            return result
+
         except Exception as e:
 
-            print("AI ERROR =", e)
+            print("===================================")
+            print("❌ AI PREDICT ERROR")
+            traceback.print_exc()
+            print("===================================")
 
             return {
                 "status": "error",
