@@ -1,31 +1,41 @@
-# ai-server/services/firebase_logger.py
-
 import datetime
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+db = None
+
 # =========================
-# Firebase INIT (Render 안전 구조)
+# Firebase INIT
 # =========================
+
 if not firebase_admin._apps:
     try:
         cred = credentials.ApplicationDefault()
         firebase_admin.initialize_app(cred)
-    except Exception as e:
-        print("Firebase init skipped:", e)
+        db = firestore.client()
 
-db = firestore.client()
+        print("✅ Firebase Connected")
+
+    except Exception as e:
+        print("⚠ Firebase Disabled :", e)
+        db = None
+
+else:
+    db = firestore.client()
 
 
 # =========================
 # LOG RESULT
 # =========================
+
 def log_result(data: dict):
-    """
-    AI 분석 결과 Firebase 저장
-    """
+
+    if db is None:
+        print("⚠ Firebase Skip")
+        return False
 
     try:
+
         doc = {
             "farm": data.get("farm", "unknown"),
             "crop": data.get("crop", "unknown"),
@@ -45,5 +55,7 @@ def log_result(data: dict):
         return True
 
     except Exception as e:
-        print("Firebase save error:", e)
+
+        print("Firebase Save Error :", e)
+
         return False
