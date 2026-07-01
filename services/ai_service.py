@@ -1,164 +1,90 @@
 from ultralytics import YOLO
+from PIL import Image
+import torch
+import io
 import os
 
-# =========================
-# MODEL LOAD (1회 로딩)
-# =========================
 
-MODEL_PATH = "runs/detect/train/weights/best.pt"
+class Predictor:
+    def __init__(self, model_path):
+        print("===================================")
+        print("🔥 AI MODEL LOADING...")
+        print("MODEL PATH =", model_path)
 
-try:
-    model = YOLO(MODEL_PATH)
+        if not os.path.exists(model_path):
+            raise Exception(f"Model not found : {model_path}")
 
-    print("✅ AI MODEL LOAD SUCCESS")
-    print("📌 MODEL PATH:", MODEL_PATH)
-    print("📌 MODEL CLASS NAMES:", model.names)
+        self.model = YOLO(model_path)
 
-    MODEL_READY = True
+        print("🔥 MODEL LOADED SUCCESS")
+        print("CLASS =", self.model.names)
+        print("===================================")
 
-except Exception as e:
+    def predict(self, image_bytes):
 
-    print("❌ AI MODEL LOAD ERROR:", e)
+        try:
 
-    model = None
-    MODEL_READY = False
+            image = Image.open(
+                io.BytesIO(image_bytes)
+            ).convert("RGB")
 
+            with torch.inference_mode():
 
-# =========================
-# PREDICT FUNCTION
-# =========================
-
-def run_ai_predict(image_path: str):
-
-    # =========================
-    # MODEL CHECK
-    # =========================
-
-    if not MODEL_READY:
-        return {
-            "success": False,
-            "error": "Model not loaded"
-        }
-
-    # =========================
-    # FILE CHECK
-    # =========================
-
-    if not os.path.exists(image_path):
-        return {
-            "success": False,
-            "error": "Image file not found"
-        }
-
-    print("\n=========================")
-    print("📷 AI PREDICT START")
-    print("📌 IMAGE:", image_path)
-
-    # =========================
-    # YOLO PREDICT
-    # =========================
-
-    results = model.predict(
-        source=image_path,
-        conf=0.5,
-        iou=0.5,
-        verbose=False
-    )
-
-    names = model.names
-
-    print("🔥 MODEL NAMES:", names)
-
-    detections = []
-
-    # =========================
-    # RESULT LOOP
-    # =========================
-
-    for r in results:
-
-        print("📦 BOXES:", r.boxes)
-
-        if r.boxes is None:
-            continue
-
-        for box in r.boxes:
-
-            try:
-
-                conf = float(box.conf[0])
-                cls_id = int(box.cls[0])
-
-                class_name = names.get(cls_id, str(cls_id))
-
-                print(
-                    f"✅ DETECTED: {class_name} / CONF: {conf}"
+                results = self.model.predict(
+                    source=image,
+                    imgsz=640,
+                    conf=0.25,
+                    verbose=False
                 )
 
-                detections.append({
-                    "name": class_name,
-                    "confidence": round(conf, 2)
-                })
+            if len(results) == 0:
+                return {
+                    "status": "success",
+                    "crop": "unknown",
+                    "disease": "정상",
+                    "confidence": 0,
+                    "risk": "LOW"
+                }
 
-            except Exception as e:
+            r = results[0]
 
-                print("❌ BOX PARSE ERROR:", e)
+            if r.boxes is None or len(r.boxes) == 0:
+                return {
+                    "status": "success",
+                    "crop": "unknown",
+                    "disease": "정상",
+                    "confidence": 0,
+                    "risk": "LOW"
+                }
 
-    # =========================
-    # 탐지 실패
-    # =========================
+            box = r.boxes[0]
 
-    if not detections:
+            cls = int(box.cls[0])
 
-        print("⚠ NO DETECTION")
+            confidence = float(box.conf[0])
 
-        return {
-            "success": True,
-            "crop": "미확인",
-            "disease": "미감지",
-            "risk": "LOW",
-            "recommendation": "추가 예찰 필요",
-            "detections": []
-        }
+            disease = self.model.names[cls]
 
-    # =========================
-    # 신뢰도 정렬
-    # =========================
+            if confidence >= 0.85:
+                risk = "HIGH"
+            elif confidence >= 0.60:
+                risk = "MEDIUM"
+            else:
+                risk = "LOW"
 
-    detections.sort(
-        key=lambda x: x["confidence"],
-        reverse=True
-    )
+            return {
+                "status": "success",
+                "crop": "unknown",
+                "disease": disease,
+                "confidence": round(confidence * 100, 2),
+                "risk": risk
+            }
 
-    top3 = detections[:3]
+        except Exception as e:
 
-    best = top3[0]
+            print("AI ERROR =", e)
 
-    name = best["name"]
-    conf = best["confidence"]
-
-    # =========================
-    # 위험도 계산
-    # =========================
-
-    if conf >= 0.85:
-        risk = "HIGH"
-
-    elif conf >= 0.60:
-        risk = "MEDIUM"
-
-    else:
-        risk = "LOW"
-
-    result = {
-        "success": True,
-        "disease": name,
-        "risk": risk,
-        "max_confidence": conf,
-        "detections": top3
-    }
-
-    print("🔥 FINAL RESULT:", result)
-    print("=========================\n")
-
-    return result
+            return {
+                "status": "error",
+                "message": str(e)
+            }
