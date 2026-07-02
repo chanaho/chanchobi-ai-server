@@ -3,7 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from services.ai_service import Predictor
-from services.firebase_logger import log_result
+
+# =========================
+# Firebase SAFE IMPORT
+# =========================
+try:
+    from services.firebase_logger import log_result
+    FIREBASE_ENABLED = True
+except:
+    print("⚠ Firebase Disabled")
+    FIREBASE_ENABLED = False
 
 app = FastAPI()
 
@@ -18,37 +27,23 @@ app.add_middleware(
 # =========================
 # MODEL PATH
 # =========================
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "model", "best.pt")
 
-MODEL_PATH = os.path.join(
-    BASE_DIR,
-    "model",
-    "best.pt"
-)
-
-print("===================================")
-print("MODEL PATH =", MODEL_PATH)
-print("MODEL EXISTS =", os.path.exists(MODEL_PATH))
-print("===================================")
+print("MODEL:", MODEL_PATH)
 
 predictor = Predictor(MODEL_PATH)
 
 # =========================
 # ROOT
 # =========================
-
 @app.get("/")
 def root():
-    return {
-        "status": "ok",
-        "service": "farm-ai"
-    }
+    return {"status": "ok"}
 
 # =========================
 # PREDICT
 # =========================
-
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     try:
@@ -56,19 +51,17 @@ async def predict(file: UploadFile = File(...)):
 
         result = predictor.predict(image_bytes)
 
-        try:
-            log_result(result)
-        except Exception as e:
-            print("Firebase Log Error:", e)
+        # Firebase 안전 처리
+        if FIREBASE_ENABLED:
+            try:
+                log_result(result)
+            except:
+                pass
 
-        return {
-            "status": "success",
-            "result": result
-        }
+        return result
 
     except Exception as e:
-        print(e)
-
+        print("API ERROR:", e)
         return {
             "status": "error",
             "message": str(e)
