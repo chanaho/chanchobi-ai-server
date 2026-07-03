@@ -72,72 +72,27 @@ async def predict(
 ):
     try:
 
-        # 0. 모델 체크
         if predictor is None:
             return {
                 "status": "error",
                 "message": "Model not loaded"
             }
 
-        # 1. 이미지 읽기
         image_bytes = await file.read()
 
-        # 2. AI 예측 (안전 처리)
-        try:
-            ai_result = predictor.predict(image_bytes)
-        except Exception as e:
-            print("MODEL ERROR:", e)
-            return {
-                "status": "error",
-                "message": "inference failed"
-            }
+        ai_result = predictor.predict(image_bytes)
 
-        if not ai_result:
-            return {
-                "status": "error",
-                "message": "empty result"
-            }
-
-        # 3. disease 안정화
         print("FINAL RESPONSE =", ai_result)
 
-        # 4. DB 매핑
-        return ai_result
-
-        # 5. 안전 응답 생성
-        response = {
-            "status": "success",
-
-            "crop": crop if crop else info.get("crop", "unknown"),
-
-            "disease": info.get("name", "알 수 없음"),
-
-            "confidence": float(ai_result.get("confidence", 0) or 0),
-
-            "risk": info.get("risk", "UNKNOWN"),
-
-            "chemical": info.get("chemical", []),
-
-            "method": info.get("method", "추가 분석 필요"),
-
-            "note": info.get("note", ""),
-
-            "warning": info.get("warning", ""),
-        }
-
-        print("FINAL RESPONSE =", response)
-
-        # 6. Firebase (완전 안전)
         if FIREBASE_ENABLED:
             try:
                 log_result(ai_result)
             except Exception as e:
                 print("Firebase Skip:", e)
 
-        return response
+        return ai_result
 
     except Exception as e:
-
         print("API CRASH:", e)
 
         return {
