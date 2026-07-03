@@ -1,5 +1,3 @@
-# disease_db.py
-
 DISEASE_DB = {
     "고추_탄저병": {
         "name": "탄저병",
@@ -113,14 +111,47 @@ DISEASE_DB = {
 }
 
 
-def get_disease_info(label: str):
-    """YOLO label → 농업 정보 변환"""
-    return DISEASE_DB.get(label, {
+# 🚀 핵심 개선 함수 (완전 안정형)
+def get_disease_info(label: str, crop: str = "unknown"):
+    """
+    YOLO label + crop → 병해 정보 반환
+    """
+
+    # 1️⃣ 가장 정확한 키 매칭
+    if crop != "unknown":
+        key = f"{crop}_{label}"
+        if key in DISEASE_DB:
+            return DISEASE_DB[key]
+
+    # 2️⃣ label이 이미 key 형태인 경우
+    if label in DISEASE_DB:
+        return DISEASE_DB[label]
+
+    # 3️⃣ crop 기준 fallback 검색
+    if crop != "unknown":
+        for db_key, value in DISEASE_DB.items():
+            if value["crop"] == crop:
+                return value
+
+    # 4️⃣ label이 정상 상태
+    if label in ["normal", "healthy"]:
+        return {
+            "name": "정상",
+            "crop": crop,
+            "risk": "LOW",
+            "chemical": [],
+            "method": "기본 관리",
+            "note": "현재 안정 상태",
+            "warning": ""
+        }
+
+    # 5️⃣ 최종 fallback
+    return {
         "name": "알 수 없음",
-        "crop": "unknown",
+        "crop": crop,
         "risk": "UNKNOWN",
         "chemical": [],
         "method": "추가 분석 필요",
-        "note": "모델 미학습 데이터",
-        "warning": "수동 확인 필요"
-    })
+        "note": "모델 미학습 또는 라벨 불일치",
+        "warning": ""
+    }
