@@ -2,8 +2,6 @@ from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-from services.disease_db import get_disease_info
-
 # =========================
 # Firebase SAFE IMPORT
 # =========================
@@ -101,10 +99,10 @@ async def predict(
             }
 
         # 3. disease 안정화
-        raw_disease = ai_result.get("disease") or "unknown"
+        print("FINAL RESPONSE =", ai_result)
 
         # 4. DB 매핑
-        info = get_disease_info(raw_disease)
+        return ai_result
 
         # 5. 안전 응답 생성
         response = {
@@ -132,7 +130,7 @@ async def predict(
         # 6. Firebase (완전 안전)
         if FIREBASE_ENABLED:
             try:
-                log_result(response)
+                log_result(ai_result)
             except Exception as e:
                 print("Firebase Skip:", e)
 
