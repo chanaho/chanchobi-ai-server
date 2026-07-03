@@ -127,6 +127,8 @@ async def predict(
             "warning": info.get("warning", ""),
         }
 
+        print("FINAL RESPONSE =", response)
+
         # 6. Firebase (완전 안전)
         if FIREBASE_ENABLED:
             try:
