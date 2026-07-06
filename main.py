@@ -1,20 +1,15 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+import shutil
 import os
-
-# =========================
-# Firebase SAFE IMPORT
-# =========================
-try:
-    from services.firebase_logger import log_result
-    FIREBASE_ENABLED = True
-except Exception:
-    print("Firebase disabled")
-    FIREBASE_ENABLED = False
-
+from PIL import Image
+import random
 
 app = FastAPI()
 
+# =========================
+# 🔥 CORS (앱 연결 필수)
+# =========================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,138 +19,49 @@ app.add_middleware(
 )
 
 # =========================
-# MODEL PATH
+# 업로드 폴더
 # =========================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "model", "best.pt")
-
-predictor = None
-
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # =========================
-# LOAD MODEL
+# 🔥 임시 클래스 (AI 대체)
 # =========================
-@app.on_event("startup")
-def load_model():
-    global predictor
-    try:
-        from services.ai_service import Predictor
-        print("🔥 MODEL LOADING:", MODEL_PATH)
+DISEASES = [
+    "감귤_궤양병",
+    "고추_탄저병",
+    "키위_점무늬병",
+    "unknown"
+]
 
-        predictor = Predictor(MODEL_PATH)
-
-        print("✅ MODEL LOADED SUCCESS")
-
-    except Exception as e:
-        print("❌ MODEL LOAD FAILED:", e)
-        predictor = None
-
+RISK_LEVEL = ["LOW", "MEDIUM", "HIGH"]
 
 # =========================
-# ROOT TEST
+# 상태 확인
 # =========================
 @app.get("/")
 def root():
-    return {
-        "status": "ok",
-        "service": "farm-ai"
-    }
-
+    return {"status": "AI SERVER RUNNING"}
 
 # =========================
-# 🔥 SAFE PREDICT API (핵심)
+# 🔥 AI 분석 API
 # =========================
 @app.post("/predict")
-async def predict(
-    file: UploadFile = File(...),
-    crop: str = Form("")
-):
-    try:
-        # -------------------------
-        # 1. 모델 체크
-        # -------------------------
-        if predictor is None:
-            return {
-                "status": "error",
-                "message": "Model not loaded",
-                "data": None
-            }
+async def predict(file: UploadFile = File(...)):
 
-        # -------------------------
-        # 2. 이미지 읽기
-        # -------------------------
-        image_bytes = await file.read()
+    # 파일 저장
+    file_path = f"{UPLOAD_DIR}/{file.filename}"
 
-        # -------------------------
-        # 3. AI 추론
-        # -------------------------
-        try:
-            ai_result = predictor.predict(image_bytes)
-        except Exception as e:
-            print("AI ERROR:", e)
-            return {
-                "status": "error",
-                "message": "inference failed",
-                "data": None
-            }
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-        # -------------------------
-        # 4. 결과 fallback 보호
-        # -------------------------
-        if not ai_result:
-            ai_result = {
-                "crop": "unknown",
-                "disease": "unknown",
-                "confidence": 0,
-                "risk": "UNKNOWN",
-                "chemical": [],
-                "method": "-",
-                "warning": ""
-            }
+    # =========================
+    # 🔥 임시 AI 결과 (추후 YOLO 교체)
+    # =========================
+    result = {
+        "disease": random.choice(DISEASES),
+        "risk": random.choice(RISK_LEVEL),
+        "confidence": round(random.uniform(0.6, 0.98), 2)
+    }
 
-        # -------------------------
-        # 5. 🔥 JSON 구조 고정 (앱 깨짐 방지 핵심)
-        # -------------------------
-        response = {
-            "status": "success",
-            "data": {
-                "crop": ai_result.get("crop", crop or "unknown"),
-                "disease": ai_result.get("disease", "unknown"),
-                "confidence": float(ai_result.get("confidence", 0) or 0),
-                "risk": ai_result.get("risk", "UNKNOWN"),
-                "chemical": ai_result.get("chemical", []),
-                "method": ai_result.get("method", "-"),
-                "warning": ai_result.get("warning", ""),
-
-                # 🔥 확장 필드 (앱 UI 안전)
-                "interval": ai_result.get("interval", "-"),
-                "riskPrediction": ai_result.get("riskPrediction", "UNKNOWN"),
-                "riskScore": ai_result.get("riskScore", 0),
-                "riskMessage": ai_result.get("riskMessage", "-")
-            }
-        }
-
-        # -------------------------
-        # 6. 로그 (옵션)
-        # -------------------------
-        if FIREBASE_ENABLED:
-            try:
-                log_result(response)
-            except Exception as e:
-                print("Firebase skip:", e)
-
-        # -------------------------
-        # 7. DEBUG 출력
-        # -------------------------
-        print("FINAL RESPONSE =", response)
-
-        return response
-
-    except Exception as e:
-        print("API CRASH:", e)
-
-        return {
-            "status": "error",
-            "message": str(e),
-            "data": None
-        }
+    return result
