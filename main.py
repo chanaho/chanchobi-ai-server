@@ -47,21 +47,31 @@ def root():
 # 🔥 AI 분석 API
 # =========================
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    crop: str = Form(None)
+):
 
-    # 파일 저장
-    file_path = f"{UPLOAD_DIR}/{file.filename}"
+    try:
+        if not crop:
+            crop = "unknown"
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        file_path = f"{UPLOAD_DIR}/{file.filename}"
 
-    # =========================
-    # 🔥 임시 AI 결과 (추후 YOLO 교체)
-    # =========================
-    result = {
-        "disease": random.choice(DISEASES),
-        "risk": random.choice(RISK_LEVEL),
-        "confidence": round(random.uniform(0.6, 0.98), 2)
-    }
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    return result
+        result = {
+            "disease": random.choice(DISEASES),
+            "risk": random.choice(RISK_LEVEL),
+            "confidence": round(random.uniform(0.6, 0.98), 2),
+            "crop": crop
+        }
+
+        return result
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "failed_safe"
+        }
