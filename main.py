@@ -1,11 +1,15 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from ultralytics import YOLO
 import shutil
 import os
 from PIL import Image
 import random
 
 app = FastAPI()
+
+MODEL = YOLO("model/best.pt")
+print("✅ MODEL LOADED:", MODEL.names)
 
 # =========================
 # 🔥 CORS (앱 연결 필수)
@@ -61,14 +65,27 @@ async def predict(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        result = {
-            "disease": random.choice(DISEASES),
-            "risk": random.choice(RISK_LEVEL),
-            "confidence": round(random.uniform(0.6, 0.98), 2),
-            "crop": crop
-        }
+        results = MODEL.predict(file_path, conf=0.25, verbose=False)
+        result = results[0]    
 
-        return result
+        if len(result.boxes) == 0:
+           return {
+              "crop": crop,
+              "disease": "알 수 없음",
+              "confidence": 0.0,
+              "risk": "UNKNOWN"
+           }
+
+        cls = int(result.boxes.cls[0])
+        conf = float(result.boxes.conf[0])
+        disease = MODEL.names[cls]
+
+        return {
+           "crop": crop,
+           "disease": disease,
+           "confidence": round(conf, 2),
+           "risk": "LOW"
+        }
 
     except Exception as e:
         return {
