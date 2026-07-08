@@ -128,7 +128,7 @@ async def predict(
 
 
         # =====================
-        # 이미지 읽기
+        # 이미지 처리
         # =====================
 
         img = cv2.imread(file_path)
@@ -145,6 +145,7 @@ async def predict(
 
         h,w = img.shape[:2]
 
+
         print(
             "IMAGE SIZE:",
             w,
@@ -153,10 +154,10 @@ async def predict(
         )
 
 
-        # 작은 이미지 변환
+
         img = cv2.resize(
             img,
-            (640,640)
+            (320,320)
         )
 
 
@@ -165,7 +166,7 @@ async def predict(
 
 
         # =====================
-        # YOLO 추론
+        # YOLO
         # =====================
 
         print("BEFORE MODEL")
@@ -176,8 +177,8 @@ async def predict(
 
         results = MODEL.predict(
             source=img,
-            imgsz=320,
-            conf=0.15,
+            imgsz=256,
+            conf=0.05,
             max_det=1,
             device="cpu",
             verbose=False
@@ -244,7 +245,6 @@ async def predict(
         # 결과
         # =====================
 
-
         cls = int(
             result.boxes.cls[0]
         )
@@ -257,6 +257,12 @@ async def predict(
 
         disease = MODEL.names[cls]
 
+
+
+        print(
+            "CLASS:",
+            cls
+        )
 
 
         print(
