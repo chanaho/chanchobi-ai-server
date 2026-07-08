@@ -20,6 +20,8 @@ print("🔥 LOADING MODEL...")
 
 MODEL = YOLO("model/best.pt")
 
+MODEL.overrides["verbose"] = False
+
 print("✅ MODEL LOADED")
 print("MODEL TASK :", MODEL.task)
 print("MODEL NAMES :", MODEL.names)
@@ -113,7 +115,7 @@ async def predict(
 
 
 
-        with open(file_path, "wb") as buffer:
+        with open(file_path,"wb") as buffer:
 
             shutil.copyfileobj(
                 file.file,
@@ -126,7 +128,7 @@ async def predict(
 
 
         # =====================
-        # 이미지 처리
+        # 이미지 읽기
         # =====================
 
         img = cv2.imread(file_path)
@@ -144,16 +146,17 @@ async def predict(
         h,w = img.shape[:2]
 
         print(
-            "IMAGE:",
+            "IMAGE SIZE:",
             w,
             "x",
             h
         )
 
 
+        # 작은 이미지 변환
         img = cv2.resize(
             img,
-            (320,320)
+            (640,640)
         )
 
 
@@ -162,7 +165,7 @@ async def predict(
 
 
         # =====================
-        # YOLO
+        # YOLO 추론
         # =====================
 
         print("BEFORE MODEL")
@@ -171,10 +174,10 @@ async def predict(
         start = time.time()
 
 
-        results = MODEL(
-            img,
-            imgsz=160,
-            conf=0.25,
+        results = MODEL.predict(
+            source=img,
+            imgsz=320,
+            conf=0.15,
             max_det=1,
             device="cpu",
             verbose=False
@@ -232,6 +235,7 @@ async def predict(
                 "risk":"UNKNOWN",
 
                 "time":elapsed
+
             }
 
 
@@ -260,6 +264,7 @@ async def predict(
             disease
         )
 
+
         print(
             "CONF:",
             conf
@@ -283,6 +288,7 @@ async def predict(
             "risk":"LOW",
 
             "time":elapsed
+
         }
 
 
