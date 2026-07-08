@@ -4,14 +4,20 @@ from ultralytics import YOLO
 import shutil
 import os
 import time
+import traceback
 
 app = FastAPI()
 
 # =========================
 # AI 모델 로드
 # =========================
+print("🔥 LOADING MODEL...")
+
 MODEL = YOLO("model/best.pt")
-print("✅ MODEL LOADED:", MODEL.names)
+
+print("✅ MODEL LOADED")
+print("MODEL TASK :", MODEL.task)
+print("MODEL NAMES :", MODEL.names)
 
 # =========================
 # CORS
@@ -31,7 +37,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # =========================
-# 상태 확인
+# ROOT
 # =========================
 @app.get("/")
 def root():
@@ -41,7 +47,16 @@ def root():
     }
 
 # =========================
-# AI 분석 API
+# HEALTH
+# =========================
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
+
+# =========================
+# AI 분석
 # =========================
 @app.post("/predict")
 async def predict(
@@ -51,42 +66,66 @@ async def predict(
 
     try:
 
-        if not crop:
+        print("\n====================================")
+        print("🔥 NEW REQUEST")
+
+        if crop is None or crop == "":
             crop = "unknown"
 
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        print("CROP :", crop)
+
+        filename = file.filename or f"{int(time.time())}.jpg"
+
+        file_path = os.path.join(
+            UPLOAD_DIR,
+            filename
+        )
+
+        print("SAVE :", file_path)
 
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        print("===================================")
-        print("START PREDICT")
-        print("FILE :", file_path)
-        print("CROP :", crop)
+        print("SAVE OK")
 
-        start = time.time()
+        # ---------------------
+        # YOLO 시작
+        # ---------------------
+        print("START PREDICT")
+
+        t0 = time.time()
 
         results = MODEL.predict(
             source=file_path,
             conf=0.25,
-            verbose=False
+            verbose=False,
+            save=False
         )
 
-        elapsed = time.time() - start
+        sec = round(time.time() - t0, 2)
 
         print("END PREDICT")
-        print("TIME :", round(elapsed, 2), "sec")
-        print("RESULT COUNT :", len(results))
+        print("TIME :", sec, "sec")
+        print("RESULT LEN :", len(results))
+
+        if len(results) == 0:
+            print("NO RESULT")
+
+            return {
+                "crop": crop,
+                "disease": "알 수 없음",
+                "confidence": 0.0,
+                "risk": "UNKNOWN"
+            }
 
         result = results[0]
 
-        print("========== DEBUG ==========")
-        print("MODEL NAMES :", MODEL.names)
-        print("BOXES :", result.boxes)
         print("BOX COUNT :", len(result.boxes))
-        print("===========================")
 
         if len(result.boxes) == 0:
+
+            print("NO BOX")
+
             return {
                 "crop": crop,
                 "disease": "알 수 없음",
@@ -96,6 +135,7 @@ async def predict(
 
         cls = int(result.boxes.cls[0])
         conf = float(result.boxes.conf[0])
+
         disease = MODEL.names[cls]
 
         print("CLASS :", cls)
@@ -109,13 +149,12 @@ async def predict(
             "risk": "LOW"
         }
 
-    except Exception as e:
-        import traceback
+    except Exception:
 
-        print("######## ERROR ########")
+        print("######## EXCEPTION ########")
         traceback.print_exc()
 
         return {
             "status": "failed_safe",
-            "error": str(e)
+            "error": traceback.format_exc()
         }
