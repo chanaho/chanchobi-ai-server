@@ -18,7 +18,10 @@ app = FastAPI()
 
 print("🔥 LOADING MODEL...")
 
-MODEL = YOLO("model/best.onnx")
+MODEL = YOLO(
+    "model/best.onnx",
+    task="detect"
+)     
 
 MODEL.overrides["verbose"] = False
 
@@ -161,7 +164,7 @@ async def predict(
         )
 
 
-        print("RESIZE OK")
+        print("FINAL IMAGE:", img.shape)
 
 
 
@@ -177,10 +180,12 @@ async def predict(
 
         results = MODEL.predict(
             source=img,
-            imgsz=256,
-            conf=0.05,
+            imgsz=320,
+            conf=0.45,
             max_det=1,
             device="cpu",
+            augment=False,
+            stream=False,
             verbose=False
         )
 
@@ -197,6 +202,24 @@ async def predict(
             "sec"
         )
 
+        if elapsed > 20:
+
+           print("⚠️ AI TIMEOUT") 
+
+           return { 
+            "success": False,
+
+            "crop": crop,
+
+            "disease": "분석시간초과",
+
+             "confidence": 0,
+
+             "risk": "UNKNOWN",
+
+             "time": elapsed
+
+           }
 
         print("AFTER MODEL")
 
