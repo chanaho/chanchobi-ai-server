@@ -66,7 +66,13 @@ async def predict(
             shutil.copyfileobj(file.file, buffer)
 
         results = MODEL.predict(file_path, conf=0.25, verbose=False)
-        result = results[0]    
+        result = results[0] 
+
+        print("========== DEBUG ==========")
+        print("MODEL NAMES:", MODEL.names)
+        print("BOXES:", result.boxes)
+        print("BOX COUNT:", len(result.boxes))
+        print("===========================")   
 
         if len(result.boxes) == 0:
            return {
