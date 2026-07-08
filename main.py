@@ -24,10 +24,6 @@ print("✅ MODEL LOADED")
 print("MODEL TASK :", MODEL.task)
 print("MODEL NAMES :", MODEL.names)
 
-print("MODEL INFO START")
-print(MODEL.model)
-print("MODEL INFO END")
-
 
 # =========================
 # CORS
@@ -72,7 +68,7 @@ def root():
 def health():
 
     return {
-        "status":"ok"
+        "status": "ok"
     }
 
 
@@ -89,7 +85,7 @@ async def predict(
 
     try:
 
-        print("\n==============================")
+        print("==============================")
         print("🔥 NEW REQUEST")
 
 
@@ -114,7 +110,7 @@ async def predict(
 
 
 
-        with open(file_path,"wb") as buffer:
+        with open(file_path, "wb") as buffer:
 
             shutil.copyfileobj(
                 file.file,
@@ -126,9 +122,9 @@ async def predict(
 
 
 
-        # -----------------------
-        # 이미지 축소
-        # -----------------------
+        # =====================
+        # 이미지 처리
+        # =====================
 
         img = cv2.imread(file_path)
 
@@ -136,54 +132,51 @@ async def predict(
         if img is None:
 
             return {
-                "success":False,
-                "error":"IMAGE READ FAIL"
+                "success": False,
+                "error": "IMAGE READ FAIL"
             }
 
 
-        h,w = img.shape[:2]
+
+        h, w = img.shape[:2]
 
         print(
-            "IMAGE SIZE:",
+            "ORIGINAL SIZE:",
             w,
             "x",
             h
         )
 
 
+        # 작은 이미지로 변환
         img = cv2.resize(
             img,
-            (256,256)
+            (320,320)
         )
 
 
-        cv2.imwrite(
-            file_path,
-            img
+        print(
+            "RESIZE OK"
         )
 
 
-        print("IMAGE RESIZE OK")
 
-
-
-        # -----------------------
-        # YOLO
-        # -----------------------
+        # =====================
+        # YOLO 추론
+        # =====================
 
         print("BEFORE MODEL")
 
-        start=time.time()
+
+        start = time.time()
 
 
         results = MODEL(
-            file_path,
-            imgsz=256,
+            img,
+            imgsz=320,
             conf=0.25,
             max_det=1,
-            verbose=False,
-            half=False,
-            augment=False
+            verbose=False
         )
 
 
@@ -194,7 +187,6 @@ async def predict(
 
 
         print("AFTER MODEL")
-
         print(
             "TIME:",
             elapsed,
@@ -218,20 +210,33 @@ async def predict(
 
 
 
-        if box_count == 0:
+        # =====================
+        # 검출 없음
+        # =====================
 
+        if box_count == 0:
 
             return {
 
-                "success":True,
-                "crop":crop,
-                "disease":"알 수 없음",
-                "confidence":0,
-                "risk":"UNKNOWN",
-                "time":elapsed
+                "success": True,
+
+                "crop": crop,
+
+                "disease": "알 수 없음",
+
+                "confidence": 0,
+
+                "risk": "UNKNOWN",
+
+                "time": elapsed
 
             }
 
+
+
+        # =====================
+        # 결과 처리
+        # =====================
 
 
         cls = int(
@@ -239,7 +244,7 @@ async def predict(
         )
 
 
-        conf=float(
+        conf = float(
             result.boxes.conf[0]
         )
 
@@ -262,27 +267,26 @@ async def predict(
 
         return {
 
+            "success": True,
 
-            "success":True,
+            "crop": crop,
 
-            "crop":crop,
+            "disease": disease,
 
-            "disease":disease,
-
-            "confidence":round(
+            "confidence": round(
                 conf,
                 2
             ),
 
-            "risk":"LOW",
+            "risk": "LOW",
 
-            "time":elapsed
+            "time": elapsed
 
         }
 
 
 
-    except Exception:
+    except Exception as e:
 
 
         print("######## ERROR ########")
@@ -292,10 +296,16 @@ async def predict(
 
         return {
 
+            "success": False,
 
-            "success":False,
+            "crop": crop,
 
-            "error":
-            traceback.format_exc()
+            "disease": "분석 실패",
+
+            "confidence": 0,
+
+            "risk": "UNKNOWN",
+
+            "error": str(e)
 
         }
