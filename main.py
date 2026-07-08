@@ -97,10 +97,12 @@ async def predict(
 
         results = MODEL(
             file_path,
-            imgsz=320,
+            imgsz=256,
             conf=0.25,
             max_det=1,
             verbose=False
+            half=False,
+            augment=False
         )
 
         sec = round(time.time() - t0, 2)
