@@ -18,7 +18,7 @@ app = FastAPI()
 
 print("🔥 LOADING MODEL...")
 
-MODEL = YOLO("model/best.pt")
+MODEL = YOLO("model/best.onnx")
 
 MODEL.overrides["verbose"] = False
 
