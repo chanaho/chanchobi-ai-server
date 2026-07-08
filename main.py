@@ -25,6 +25,7 @@ print("MODEL TASK :", MODEL.task)
 print("MODEL NAMES :", MODEL.names)
 
 
+
 # =========================
 # CORS
 # =========================
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 
+
 # =========================
 # Upload
 # =========================
@@ -48,6 +50,7 @@ os.makedirs(
     UPLOAD_DIR,
     exist_ok=True
 )
+
 
 
 # =========================
@@ -68,7 +71,7 @@ def root():
 def health():
 
     return {
-        "status": "ok"
+        "status":"ok"
     }
 
 
@@ -132,37 +135,34 @@ async def predict(
         if img is None:
 
             return {
-                "success": False,
-                "error": "IMAGE READ FAIL"
+                "success":False,
+                "error":"IMAGE READ FAIL"
             }
 
 
 
-        h, w = img.shape[:2]
+        h,w = img.shape[:2]
 
         print(
-            "ORIGINAL SIZE:",
+            "IMAGE:",
             w,
             "x",
             h
         )
 
 
-        # 작은 이미지로 변환
         img = cv2.resize(
             img,
             (320,320)
         )
 
 
-        print(
-            "RESIZE OK"
-        )
+        print("RESIZE OK")
 
 
 
         # =====================
-        # YOLO 추론
+        # YOLO
         # =====================
 
         print("BEFORE MODEL")
@@ -173,9 +173,10 @@ async def predict(
 
         results = MODEL(
             img,
-            imgsz=320,
+            imgsz=160,
             conf=0.25,
             max_det=1,
+            device="cpu",
             verbose=False
         )
 
@@ -186,12 +187,14 @@ async def predict(
         )
 
 
-        print("AFTER MODEL")
         print(
-            "TIME:",
+            "MODEL TIME:",
             elapsed,
             "sec"
         )
+
+
+        print("AFTER MODEL")
 
 
 
@@ -218,24 +221,23 @@ async def predict(
 
             return {
 
-                "success": True,
+                "success":True,
 
-                "crop": crop,
+                "crop":crop,
 
-                "disease": "알 수 없음",
+                "disease":"알 수 없음",
 
-                "confidence": 0,
+                "confidence":0,
 
-                "risk": "UNKNOWN",
+                "risk":"UNKNOWN",
 
-                "time": elapsed
-
+                "time":elapsed
             }
 
 
 
         # =====================
-        # 결과 처리
+        # 결과
         # =====================
 
 
@@ -267,21 +269,20 @@ async def predict(
 
         return {
 
-            "success": True,
+            "success":True,
 
-            "crop": crop,
+            "crop":crop,
 
-            "disease": disease,
+            "disease":disease,
 
-            "confidence": round(
+            "confidence":round(
                 conf,
                 2
             ),
 
-            "risk": "LOW",
+            "risk":"LOW",
 
-            "time": elapsed
-
+            "time":elapsed
         }
 
 
@@ -296,16 +297,16 @@ async def predict(
 
         return {
 
-            "success": False,
+            "success":False,
 
-            "crop": crop,
+            "crop":crop,
 
-            "disease": "분석 실패",
+            "disease":"분석 실패",
 
-            "confidence": 0,
+            "confidence":0,
 
-            "risk": "UNKNOWN",
+            "risk":"UNKNOWN",
 
-            "error": str(e)
+            "error":str(e)
 
         }
