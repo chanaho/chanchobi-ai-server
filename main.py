@@ -196,7 +196,7 @@ async def predict(
         print("ONNX TIME :", model_time)
 
         elapsed = model_time
-        
+
         print("OUTPUT SHAPE :", outputs[0].shape)
         print("OUTPUT TYPE :", type(outputs[0]))        
 
@@ -229,15 +229,40 @@ async def predict(
         if pred.shape[0] < pred.shape[1]:
             pred = pred.T
 
-        print("PRED SHAPE :", pred.shape)
+        print(
+            "PRED SHAPE :",
+            pred.shape
+        )
 
-        scores = np.max(pred[:, 5:], axis=1)
-        best_idx = np.argmax(scores)
+        scores = np.max(
+            pred[:, 5:],
+            axis=1
+        )
+
+        best_idx = int(
+            np.argmax(scores)
+        )
 
         best = pred[best_idx]
-        best_score = float(scores[best_idx])
 
-        print("BEST SCORE :", round(best_score, 4))
+        best_score = float(
+            scores[best_idx]
+        )
+
+        print(
+            "BEST INDEX :",
+            best_idx
+        )
+
+        print(
+            "BEST SCORE :",
+            round(best_score, 4)
+        )
+
+        print(
+            "BEST ROW :",
+            best
+        )
 
         # =====================
         # 검출 없음
