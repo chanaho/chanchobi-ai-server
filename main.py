@@ -2,11 +2,11 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 
-import shutil
 import os
 import time
 import traceback
 import cv2
+import numpy as np
 
 
 app = FastAPI()
@@ -18,12 +18,14 @@ app = FastAPI()
 
 print("🔥 LOADING MODEL...")
 
-os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
-os.environ["ORT_NUM_THREADS"] = "2"
+os.environ["ORT_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 
 MODEL = YOLO(
-    "model/best.onnx",
+    "model/best-int8.onnx",
     task="detect"
 )     
 
@@ -109,46 +111,28 @@ async def predict(
 
 
 
-        filename = file.filename or "photo.jpg"
+        contents = await file.read()
 
-
-        file_path = os.path.join(
-            UPLOAD_DIR,
-            filename
+        img = cv2.imdecode(
+            np.frombuffer(contents, np.uint8),
+            cv2.IMREAD_COLOR
         )
 
-
-        print("SAVE :", file_path)
-
-
-
-        with open(file_path,"wb") as buffer:
-
-            shutil.copyfileobj(
-                file.file,
-                buffer
-            )
-
-
-        print("SAVE OK")
-
-
-
-        # =====================
-        # 이미지 처리
-        # =====================
-
-        img = cv2.imread(file_path)
-
+        print("IMAGE LOAD OK")
 
         if img is None:
+            print("❌ IMAGE DECODE FAIL")
 
             return {
                 "success":False,
-                "error":"IMAGE READ FAIL"
+                "crop": crop,
+                "disease": "이미지 읽기 실패",
+                "confidence": 0,
+                "risk": "UNKNOWN",
+                "error": "IMAGE DECODE FAIL"
             }
 
-
+        print("✅ IMAGE DECODE SUCCESS")    
 
         h,w = img.shape[:2]
 
@@ -182,15 +166,13 @@ async def predict(
         start = time.time()
 
 
-        results = MODEL.predict(
-            source=img,
+        results = MODEL(
+            img,
             imgsz=320,
             conf=0.10,
             iou=0.45,
             max_det=1,
-            device="cpu",
-            augment=False,
-            stream=False,
+            device="cpu",                                  
             verbose=False
         )
 
@@ -207,23 +189,17 @@ async def predict(
             "sec"
         )
 
-        if elapsed > 20:
+        if elapsed > 30:
 
            print("⚠️ AI TIMEOUT") 
 
            return { 
             "success": False,
-
             "crop": crop,
-
             "disease": "분석시간초과",
-
              "confidence": 0,
-
              "risk": "UNKNOWN",
-
              "time": elapsed
-
            }
 
         print("AFTER MODEL")
