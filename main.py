@@ -260,8 +260,23 @@ async def predict(
         )
 
         print(
+            "BEST ROW SHAPE :",
+            best.shape
+        )
+
+        print(
             "BEST ROW :",
-            best
+            np.round(best, 4)
+        )
+
+        print(
+            "MAX OUTPUT :",
+            round(float(np.max(pred)), 4)
+        )
+
+        print(
+            "MIN OUTPUT :",
+            round(float(np.min(pred)), 4)
         )
 
         # =====================
