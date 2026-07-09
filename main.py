@@ -8,6 +8,8 @@ import traceback
 import cv2
 import numpy as np
 
+cv2.setNumThreads(1)
+
 app = FastAPI()
 
 
@@ -23,8 +25,16 @@ os.environ["ORT_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
+so = ort.SessionOptions()
+
+so.intra_op_num_threads = 1
+so.inter_op_num_threads = 1
+so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
 session = ort.InferenceSession(
-    "model/best-int8.onnx",
+    "model/best.onnx",
+    sess_options=so,
     providers=["CPUExecutionProvider"]
 )
 
@@ -154,15 +164,17 @@ async def predict(
 
 
 
-        img = cv2.resize(
-            img,
-            (320,320)
-        )
+        img = cv2.resize(img, (320, 320), interpolation=cv2.INTER_AREA)
 
+        print("FINAL IMAGE :", img.shape)
 
-        print("FINAL IMAGE:", img.shape)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32)
+        img /= 255.0
 
-
+        img = np.transpose(img, (2, 0, 1))
+        img = np.expand_dims(img, axis=0)
+        img = np.ascontiguousarray(img)
 
         # =====================
         # YOLO
@@ -170,29 +182,21 @@ async def predict(
 
         print("BEFORE MODEL")
 
+        t1 = time.time()
 
-        start = time.time()
-
-        # OpenCV(BGR) → RGB
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        # float32 변환
-        img_rgb = img_rgb.astype(np.float32) / 255.0
-
-        # (320,320,3) → (1,3,320,320)
-        img_input = np.transpose(img_rgb, (2, 0, 1))
-        img_input = np.expand_dims(img_input, axis=0)
-
-        # ONNX 추론
         outputs = session.run(
             output_names,
-            {input_name: img_input}
+            {input_name: img}
         )
 
-        elapsed = round(time.time() - start, 2)
+        t2 = time.time()
 
+        model_time = round(t2 - t1, 2)
 
-        print("MODEL TIME :", elapsed)
+        print("ONNX TIME :", model_time)
+
+        elapsed = model_time
+        
         print("OUTPUT SHAPE :", outputs[0].shape)
         print("OUTPUT TYPE :", type(outputs[0]))        
 
@@ -219,32 +223,21 @@ async def predict(
 
         pred = outputs[0]
 
-        print("OUTPUT SHAPE :", outputs[0].shape)
-
-        best = None
-        best_score = 0.0
-
-        # 출력 형태 확인
-        if len(pred.shape) == 3:
+        if pred.ndim == 3:
             pred = pred[0]
 
-        # (15,2100) 형태이면 전치
         if pred.shape[0] < pred.shape[1]:
-           pred = pred.T
+            pred = pred.T
 
         print("PRED SHAPE :", pred.shape)
 
-        best = None
-        best_score = 0.0
+        scores = np.max(pred[:, 5:], axis=1)
+        best_idx = np.argmax(scores)
 
-        for row in pred:
-            score = float(np.max(row[4:]))
+        best = pred[best_idx]
+        best_score = float(scores[best_idx])
 
-            if score > best_score:
-               best_score = score
-               best = row
-
-        print("BEST SCORE :", best_score)
+        print("BEST SCORE :", round(best_score, 4))
 
         # =====================
         # 검출 없음
