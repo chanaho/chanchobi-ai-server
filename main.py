@@ -18,6 +18,10 @@ app = FastAPI()
 
 print("🔥 LOADING MODEL...")
 
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
+os.environ["ORT_NUM_THREADS"] = "2"
+
 MODEL = YOLO(
     "model/best.onnx",
     task="detect"
@@ -181,7 +185,8 @@ async def predict(
         results = MODEL.predict(
             source=img,
             imgsz=320,
-            conf=0.45,
+            conf=0.10,
+            iou=0.45,
             max_det=1,
             device="cpu",
             augment=False,
