@@ -7,6 +7,7 @@ import time
 import traceback
 import cv2
 import numpy as np
+import yaml
 
 cv2.setNumThreads(1)
 
@@ -41,19 +42,26 @@ session = ort.InferenceSession(
 input_name = session.get_inputs()[0].name
 output_names = [o.name for o in session.get_outputs()]
 
+# =========================
+# CLASS NAME LOAD
+# =========================
+
+DATASET_YAML = "dataset_new/dataset.yaml"
+
+with open(DATASET_YAML, "r", encoding="utf-8") as f:
+    data = yaml.safe_load(f)
+
 CLASS_NAMES = {
-    0: "고추_탄저병",
-    1: "사과_갈색무늬병",
-    2: "자두_세균성구멍병",
-    3: "아로니아_잿빛곰팡이병",
-    4: "복숭아_세균성구멍병",
-    5: "체리_갈색무늬병",
-    6: "포도_노균병",
-    7: "블루베리_잿빛곰팡이병",
-    8: "토마토_잎마름병",
-    9: "오이_노균병",
-    10: "수박_덩굴마름병"
+    i: name
+    for i, name in enumerate(data["names"])
 }
+
+print("=" * 50)
+print("DATASET :", DATASET_YAML)
+print("CLASS_NAMES :", CLASS_NAMES)
+print("=" * 50)
+print("### MAIN.PY VERSION : 2026-07-10 STEP1 ###")
+print("CLASS_NAMES =", CLASS_NAMES)
 
 # =========================
 # CORS
