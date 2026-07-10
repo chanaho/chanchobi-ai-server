@@ -164,7 +164,7 @@ async def predict(
 
 
 
-        img = cv2.resize(img, (320, 320), interpolation=cv2.INTER_AREA)
+        img = cv2.resize(img, (640, 640), interpolation=cv2.INTER_AREA)
 
         print("FINAL IMAGE :", img.shape)
 
