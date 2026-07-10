@@ -234,65 +234,55 @@ async def predict(
             pred.shape
         )
 
+
         scores = np.max(
             pred[:, 5:],
             axis=1
         )
 
+
         best_idx = int(
             np.argmax(scores)
         )
 
+
         best = pred[best_idx]
+
 
         best_score = float(
             scores[best_idx]
         )
 
+
         print(
             "BEST INDEX :",
             best_idx
         )
+
 
         print(
             "BEST SCORE :",
-            round(best_score, 4)            
+            round(best_score, 4)
         )
 
-        print(
-            "BEST INDEX :",
-            best_idx
-        )
-
-        print(
-            "BEST ROW :",
-            np.round(best, 4)
-        )
-
-        print(
-            "MAX OUTPUT :",
-            round(float(np.max(pred)), 4)
-        )
-
-        print(
-            "MIN OUTPUT :",
-            round(float(np.min(pred)), 4)
-        )
 
         print(
             "BEST ROW SHAPE :",
             best.shape
         )
 
+
         print(
             "BEST ROW :",
             np.round(best, 4)
         )
 
+
         print(
             "MAX OUTPUT :",
             round(float(np.max(pred)), 4)
         )
+
 
         print(
             "MIN OUTPUT :",
