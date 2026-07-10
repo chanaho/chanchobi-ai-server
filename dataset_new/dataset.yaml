@@ -1,0 +1,8 @@
+train: images/train
+val: images/val
+
+nc: 2
+
+names:
+  - 감귤_궤양병
+  - 감귤_정상

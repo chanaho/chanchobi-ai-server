@@ -2,6 +2,8 @@ venv/
 __pycache__/
 dataset/
 dataset_*/
+!dataset_new/
+!dataset_new/**
 runs/
 uploads/
 my_farm_photos/
@@ -12,3 +14,5 @@ firebase-key.json
 .env
 *.pt
 .env*.local
+!dataset_new/
+!dataset_new/dataset.yaml
