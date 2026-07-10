@@ -236,7 +236,7 @@ async def predict(
 
 
         scores = np.max(
-            pred[:, 5:],
+            pred[:, 4:],
             axis=1
         )
 
@@ -318,7 +318,7 @@ async def predict(
         # x, y, w, h 다음부터 클래스 점수
         # YOLO 출력
         objectness = float(best[4])
-        class_scores = best[5:]
+        class_scores = best[4:]
 
         cls = int(np.argmax(class_scores))
         class_conf = float(class_scores[cls])
