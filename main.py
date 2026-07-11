@@ -113,8 +113,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-
 # =========================
 # Upload
 # =========================
@@ -125,8 +123,6 @@ os.makedirs(
     UPLOAD_DIR,
     exist_ok=True
 )
-
-
 
 # =========================
 # ROOT
@@ -140,16 +136,12 @@ def root():
         "classes": CLASS_NAMES
     }
 
-
-
 @app.get("/health")
 def health():
 
     return {
         "status":"ok"
     }
-
-
 
 # =========================
 # PREDICT
@@ -172,8 +164,6 @@ async def predict(
 
 
         print("CROP :", crop)
-
-
 
         contents = await file.read()
 
@@ -207,8 +197,6 @@ async def predict(
             "x",
             h
         )
-
-
 
         img = cv2.resize(img, (640, 640), interpolation=cv2.INTER_AREA)
 
@@ -261,13 +249,11 @@ async def predict(
 
         print("AFTER MODEL")
 
-
-
         # =====================
         # ONNX 결과
         # =====================
 
-        pred = outputs[0]
+         pred = outputs[0]
 
         if pred.ndim == 3:
             pred = pred[0]
@@ -275,127 +261,114 @@ async def predict(
         if pred.shape[0] < pred.shape[1]:
             pred = pred.T
 
-            print("=" * 60)
-            print("FIRST DETECTION")
-            print(np.round(pred[0], 4))
-            print()
+        print("PRED SHAPE :", pred.shape)
 
-            print("BEST DETECTION")
-            print(np.round(best, 4))
-            print("=" * 60)
+        print("=" * 60)
+        print("FIRST DETECTION")
+        print(np.round(pred[0], 4))
 
-        print(
-            "PRED SHAPE :",
-            pred.shape
-        )
+        # ==========================================
+        # YOLOv8 ONNX 후처리
+        # output : (8400, 15)
+        # [x,y,w,h,class0...class10]
+        # ==========================================
 
+        boxes = pred[:, :4]
 
-        scores = np.max(
-            pred[:, 4:],
-            axis=1
-        )
+        class_scores = pred[:, 4:]
 
+        cls_scores = np.max(class_scores, axis=1)
 
-        best_idx = int(
-            np.argmax(scores)
-        )
+        cls_ids = np.argmax(class_scores, axis=1)
 
+        best_idx = int(np.argmax(cls_scores))
 
-        best = pred[best_idx]
+        best_score = float(cls_scores[best_idx])
 
+        best_box = boxes[best_idx]
 
-        best_score = float(
-            scores[best_idx]
-        )
+        best_cls = int(cls_ids[best_idx])
 
 
-        print(
-            "BEST INDEX :",
-            best_idx
-        )
+        print()
+        print("BEST DETECTION")
+        print("BOX :", np.round(best_box, 4))
+        print("CLASS :", best_cls)
+        print("SCORE :", round(best_score, 4))
+        print("=" * 60)
 
 
-        print(
-            "BEST SCORE :",
-            round(best_score, 4)
-        )
+        print("BEST INDEX :", best_idx)
+        print("MAX OUTPUT :", round(float(np.max(pred)), 4))
+        print("MIN OUTPUT :", round(float(np.min(pred)), 4))
 
-
-        print(
-            "BEST ROW SHAPE :",
-            best.shape
-        )
-
-
-        print(
-            "BEST ROW :",
-            np.round(best, 4)
-        )
-
-
-        print(
-            "MAX OUTPUT :",
-            round(float(np.max(pred)), 4)
-        )
-
-
-        print(
-            "MIN OUTPUT :",
-            round(float(np.min(pred)), 4)
-        )
 
         # =====================
         # 검출 없음
         # =====================
 
-        if best is None or best_score < 0.10:
+        if best_score < 0.10:
 
-           return {
+            return {
+                "success": True,
+                "crop": crop,
+                "disease": "알 수 없음",
+                "confidence": 0,
+                "risk": "UNKNOWN",
+                "time": elapsed
+            }
 
-               "success": True,
-
-               "crop": crop,
-
-               "disease": "알 수 없음",
-
-               "confidence": 0,
-
-               "risk": "UNKNOWN",
-
-               "time": elapsed
-
-           }
 
         # =====================
-        # 결과
+        # 최종 결과
         # =====================
 
-        class_scores = best[4:]
+        confidence = best_score
 
-        cls = int(np.argmax(class_scores))
+        disease = CLASS_NAMES.get(
+            best_cls,
+            "알 수 없음"
+        )
 
-        conf = float(class_scores[cls])
 
-        disease = CLASS_NAMES.get(cls, "알 수 없음")
+        print("CLASS :", best_cls)
 
-        print("CLASS :", cls)
         print("DISEASE :", disease)
-        print("CONF :", round(conf, 4))
 
-        if conf >= 0.80:
+        print(
+            "CONFIDENCE :",
+            round(confidence, 4)
+        )
+
+
+        if confidence >= 0.80:
+
             risk = "HIGH"
-        elif conf >= 0.50:
+
+        elif confidence >= 0.50:
+
             risk = "MEDIUM"
+
         else:
+
             risk = "LOW"
 
+
+
         return {
+
             "success": True,
+
             "crop": crop,
+
             "disease": disease,
-            "confidence": round(conf, 2),
+
+            "confidence": round(confidence, 2),
+
             "risk": risk,
+
             "time": elapsed
+
         }
 
     except Exception as e:
@@ -421,3 +394,14 @@ async def predict(
             "error":str(e)
 
         }
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False
+    )         
+
