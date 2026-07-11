@@ -253,7 +253,7 @@ async def predict(
         # ONNX 결과
         # =====================
 
-         pred = outputs[0]
+        pred = outputs[0]
 
         if pred.ndim == 3:
             pred = pred[0]
