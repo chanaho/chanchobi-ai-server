@@ -8,17 +8,30 @@ import traceback
 import cv2
 import numpy as np
 import yaml
+import onnxruntime as ort
+from fastapi import FastAPI
 
 cv2.setNumThreads(1)
 
 app = FastAPI()
-
 
 # =========================
 # AI 모델 로드
 # =========================
 
 print("🔥 LOADING MODEL...")
+
+# ONNX 파일 확인
+onnx_path = os.path.abspath("model/best.onnx")
+
+print("=" * 60)
+print("ONNX FILE :", onnx_path)
+print("ONNX EXISTS :", os.path.exists(onnx_path))
+
+if os.path.exists(onnx_path):
+    print("ONNX SIZE :", os.path.getsize(onnx_path), "bytes")
+
+print("=" * 60)
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
@@ -27,20 +40,39 @@ os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
 so = ort.SessionOptions()
-
 so.intra_op_num_threads = 1
 so.inter_op_num_threads = 1
 so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
 session = ort.InferenceSession(
-    "model/best.onnx",
+    onnx_path,
     sess_options=so,
     providers=["CPUExecutionProvider"]
 )
 
 input_name = session.get_inputs()[0].name
 output_names = [o.name for o in session.get_outputs()]
+
+print("INPUTS")
+for i in session.get_inputs():
+    print(
+        i.name,
+        i.shape,
+        i.type
+    )
+
+print()
+
+print("OUTPUTS")
+for o in session.get_outputs():
+    print(
+        o.name,
+        o.shape,
+        o.type
+    )
+
+print("=" * 60)
 
 # =========================
 # CLASS NAME LOAD
@@ -243,6 +275,15 @@ async def predict(
         if pred.shape[0] < pred.shape[1]:
             pred = pred.T
 
+            print("=" * 60)
+            print("FIRST DETECTION")
+            print(np.round(pred[0], 4))
+            print()
+
+            print("BEST DETECTION")
+            print(np.round(best, 4))
+            print("=" * 60)
+
         print(
             "PRED SHAPE :",
             pred.shape
@@ -329,31 +370,33 @@ async def predict(
         # 결과
         # =====================
 
-        # x, y, w, h 다음부터 클래스 점수
-        # YOLO 출력
-        objectness = float(best[4])
         class_scores = best[4:]
 
         cls = int(np.argmax(class_scores))
-        class_conf = float(class_scores[cls])
 
-        conf = objectness * class_conf
+        conf = float(class_scores[cls])
 
         disease = CLASS_NAMES.get(cls, "알 수 없음")
 
         print("CLASS :", cls)
         print("DISEASE :", disease)
-        print("CONF :", round(conf, 2))
+        print("CONF :", round(conf, 4))
+
+        if conf >= 0.80:
+            risk = "HIGH"
+        elif conf >= 0.50:
+            risk = "MEDIUM"
+        else:
+            risk = "LOW"
 
         return {
             "success": True,
             "crop": crop,
             "disease": disease,
             "confidence": round(conf, 2),
-            "risk": "LOW" if conf >= 0.7 else "MEDIUM",
+            "risk": risk,
             "time": elapsed
         }
-
 
     except Exception as e:
 
