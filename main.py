@@ -277,6 +277,8 @@ async def predict(
 
         class_scores = pred[:, 4:]
 
+        class_scores = 1 / (1 + np.exp(-class_scores))
+
         cls_scores = np.max(class_scores, axis=1)
 
         cls_ids = np.argmax(class_scores, axis=1)
