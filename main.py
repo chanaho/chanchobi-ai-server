@@ -46,15 +46,21 @@ output_names = [o.name for o in session.get_outputs()]
 # CLASS NAME LOAD
 # =========================
 
-DATASET_YAML = "dataset_new/dataset.yaml"
+DATASET_YAML = "crop_dataset.yaml"
 
 with open(DATASET_YAML, "r", encoding="utf-8") as f:
     data = yaml.safe_load(f)
 
-CLASS_NAMES = {
-    i: name
-    for i, name in enumerate(data["names"])
-}
+if isinstance(data["names"], dict):
+    CLASS_NAMES = {
+        int(k): v
+        for k, v in data["names"].items()
+    }
+else:
+    CLASS_NAMES = {
+        i: name
+        for i, name in enumerate(data["names"])
+    }
 
 print("=" * 50)
 print("DATASET :", DATASET_YAML)
