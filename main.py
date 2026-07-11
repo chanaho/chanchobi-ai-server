@@ -275,11 +275,14 @@ async def predict(
 
         boxes = pred[:, :4]
 
-        class_scores = pred[:, 4:]
-
-        class_scores = 1 / (1 + np.exp(-class_scores))
+        class_scores = pred[:, 4:]        
 
         cls_scores = np.max(class_scores, axis=1)
+
+        print("CLASS MAX :", float(np.max(class_scores)))
+        print("CLASS MIN :", float(np.min(class_scores)))
+        print("TOP CLASS :", int(np.argmax(cls_scores)))
+        print("TOP SCORE :", float(np.max(cls_scores)))
 
         cls_ids = np.argmax(class_scores, axis=1)
 
