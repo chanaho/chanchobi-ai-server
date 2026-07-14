@@ -21,15 +21,41 @@ app = FastAPI()
 # Firebase 초기화
 
 if not firebase_admin._apps:
-    firebase_json = os.environ.get("FIREBASE_KEY")
-    cred = credentials.Certificate(
-        json.loads(firebase_json)
-    )
-    firebase_admin.initialize_app(
-        cred
-    )
 
-db = firestore.client()
+    firebase_json = os.environ.get("FIREBASE_KEY")
+
+    if firebase_json:
+
+        cred = credentials.Certificate(
+            json.loads(firebase_json)
+        )
+
+        firebase_admin.initialize_app(
+            cred
+        )
+
+    elif os.path.exists("firebase-key.json"):
+
+        cred = credentials.Certificate(
+            "firebase-key.json"
+        )
+
+        firebase_admin.initialize_app(
+            cred
+        )
+
+    else:
+
+        print("⚠ FIREBASE 인증키 없음")
+
+
+if firebase_admin._apps:
+
+    db = firestore.client()
+
+else:
+
+    db = None
 
 # =========================
 # Firebase 질병정보 조회
