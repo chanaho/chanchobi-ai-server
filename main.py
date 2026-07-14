@@ -1,19 +1,70 @@
 from fastapi import FastAPI, UploadFile, File, Form
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 from fastapi.middleware.cors import CORSMiddleware
-import onnxruntime as ort
+from ultralytics import YOLO
 
 import os
 import time
 import traceback
 import cv2
 import numpy as np
-import yaml
-import onnxruntime as ort
-from fastapi import FastAPI
+
 
 cv2.setNumThreads(1)
 
+
 app = FastAPI()
+
+# Firebase 초기화
+
+if not firebase_admin._apps:
+
+    cred = credentials.Certificate(
+        "firebase-key.json"
+    )
+
+    firebase_admin.initialize_app(
+        cred
+    )
+
+
+db = firestore.client()
+
+# =========================
+# Firebase 질병정보 조회
+# =========================
+
+def get_disease_info(crop, disease_id):
+
+    try:
+
+        doc = (
+            db.collection("crops")
+            .document(crop)
+            .collection("diseases")
+            .document(disease_id)
+            .get()
+        )
+
+
+        if doc.exists:
+
+            return doc.to_dict()
+
+
+        return None
+
+
+    except Exception as e:
+
+        print(
+            "FIREBASE ERROR:",
+            e
+        )
+
+        return None
 
 # =========================
 # AI 모델 로드
@@ -21,97 +72,53 @@ app = FastAPI()
 
 print("🔥 LOADING MODEL...")
 
-# ONNX 파일 확인
-onnx_path = os.path.abspath("model/best.onnx")
 
-print("=" * 60)
-print("ONNX FILE :", onnx_path)
-print("ONNX EXISTS :", os.path.exists(onnx_path))
+print("🔥 LOADING CLASSIFICATION MODEL")
 
-if os.path.exists(onnx_path):
-    print("ONNX SIZE :", os.path.getsize(onnx_path), "bytes")
 
-print("=" * 60)
+MODEL_PATH = "models/chanchobi_cls_best.pt"
 
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
-os.environ["ORT_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
+if not os.path.exists(MODEL_PATH):
 
-so = ort.SessionOptions()
-so.intra_op_num_threads = 1
-so.inter_op_num_threads = 1
-so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    print("❌ MODEL FILE NOT FOUND :", MODEL_PATH)
 
-session = ort.InferenceSession(
-    onnx_path,
-    sess_options=so,
-    providers=["CPUExecutionProvider"]
+    exit()
+
+
+model = YOLO(
+    MODEL_PATH
 )
 
-input_name = session.get_inputs()[0].name
-output_names = [o.name for o in session.get_outputs()]
 
-print("INPUTS")
-for i in session.get_inputs():
-    print(
-        i.name,
-        i.shape,
-        i.type
-    )
+print("🔥 MODEL LOADED")
 
-print()
 
-print("OUTPUTS")
-for o in session.get_outputs():
-    print(
-        o.name,
-        o.shape,
-        o.type
-    )
+print(
+    "MODEL NAMES :",
+    model.names
+)
 
-print("=" * 60)
 
-# =========================
-# CLASS NAME LOAD
-# =========================
-
-DATASET_YAML = "crop_dataset.yaml"
-
-with open(DATASET_YAML, "r", encoding="utf-8") as f:
-    data = yaml.safe_load(f)
-
-if isinstance(data["names"], dict):
-    CLASS_NAMES = {
-        int(k): v
-        for k, v in data["names"].items()
-    }
-else:
-    CLASS_NAMES = {
-        i: name
-        for i, name in enumerate(data["names"])
-    }
-
-print("=" * 50)
-print("DATASET :", DATASET_YAML)
-print("CLASS_NAMES :", CLASS_NAMES)
-print("=" * 50)
-print("### MAIN.PY VERSION : 2026-07-10 STEP1 ###")
-print("CLASS_NAMES =", CLASS_NAMES)
 
 # =========================
 # CORS
 # =========================
 
 app.add_middleware(
+
     CORSMiddleware,
+
     allow_origins=["*"],
+
     allow_credentials=True,
+
     allow_methods=["*"],
+
     allow_headers=["*"],
+
 )
+
+
 
 # =========================
 # Upload
@@ -119,28 +126,42 @@ app.add_middleware(
 
 UPLOAD_DIR = "uploads"
 
+
 os.makedirs(
+
     UPLOAD_DIR,
+
     exist_ok=True
+
 )
+
+
 
 # =========================
 # ROOT
 # =========================
 
+
 @app.get("/")
 def root():
 
     return {
+
         "status": "AI SERVER RUNNING",
-        "classes": CLASS_NAMES
+
+        "classes": model.names
+
     }
+
+
 
 @app.get("/health")
 def health():
 
     return {
-        "status":"ok"
+
+        "status": "ok"
+
     }
 
 # =========================
@@ -158,207 +179,368 @@ async def predict(
         print("==============================")
         print("🔥 NEW REQUEST")
 
-
-        if not crop:
-            crop = "unknown"
+        print("RECEIVED CROP :", crop)
 
 
-        print("CROP :", crop)
+        if crop is None:
+            crop = ""
+
+        crop = crop.strip()  
+
+        print("FINAL CROP :", crop)
+
 
         contents = await file.read()
+
 
         img = cv2.imdecode(
             np.frombuffer(contents, np.uint8),
             cv2.IMREAD_COLOR
         )
 
-        print("IMAGE LOAD OK")
 
         if img is None:
+
             print("❌ IMAGE DECODE FAIL")
 
             return {
-                "success":False,
+                "success": False,
                 "crop": crop,
                 "disease": "이미지 읽기 실패",
                 "confidence": 0,
-                "risk": "UNKNOWN",
-                "error": "IMAGE DECODE FAIL"
+                "risk": "UNKNOWN"
             }
 
-        print("✅ IMAGE DECODE SUCCESS")    
 
-        h,w = img.shape[:2]
+        print("✅ IMAGE DECODE SUCCESS")
+
+
+        h, w = img.shape[:2]
 
 
         print(
-            "IMAGE SIZE:",
+            "IMAGE SIZE :",
             w,
             "x",
             h
         )
 
-        img = cv2.resize(img, (640, 640), interpolation=cv2.INTER_AREA)
 
-        print("FINAL IMAGE :", img.shape)
+        img = cv2.resize(
+            img,
+            (640,640),
+            interpolation=cv2.INTER_AREA
+        )
 
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img.astype(np.float32)
-        img /= 255.0
 
-        img = np.transpose(img, (2, 0, 1))
-        img = np.expand_dims(img, axis=0)
-        img = np.ascontiguousarray(img)
+        print(
+            "FINAL IMAGE :",
+            img.shape
+        )
+
 
         # =====================
-        # YOLO
+        # YOLO CLASSIFICATION
         # =====================
 
-        print("BEFORE MODEL")
+        print("🔥 BEFORE MODEL")
+
 
         t1 = time.time()
 
-        outputs = session.run(
-            output_names,
-            {input_name: img}
+
+        results = model.predict(
+            source=img,
+            imgsz=640,
+            verbose=False
         )
+
 
         t2 = time.time()
 
-        model_time = round(t2 - t1, 2)
 
-        print("ONNX TIME :", model_time)
+        elapsed = round(
+            t2 - t1,
+            2
+        )
 
-        elapsed = model_time
 
-        print("OUTPUT SHAPE :", outputs[0].shape)
-        print("OUTPUT TYPE :", type(outputs[0]))        
+        print(
+            "YOLO TIME :",
+            elapsed
+        )
+
 
         if elapsed > 30:
 
-           print("⚠️ AI TIMEOUT") 
-
-           return { 
-            "success": False,
-            "crop": crop,
-            "disease": "분석시간초과",
-             "confidence": 0,
-             "risk": "UNKNOWN",
-             "time": elapsed
-           }
-
-        print("AFTER MODEL")
-
-        # =====================
-        # ONNX 결과
-        # =====================
-
-        pred = outputs[0]
-
-        if pred.ndim == 3:
-            pred = pred[0]
-
-        if pred.shape[0] < pred.shape[1]:
-            pred = pred.T
-
-        print("PRED SHAPE :", pred.shape)
-
-        print("=" * 60)
-        print("FIRST DETECTION")
-        print(np.round(pred[0], 4))
-
-        # ==========================================
-        # YOLOv8 ONNX 후처리
-        # output : (8400, 15)
-        # [x,y,w,h,class0...class10]
-        # ==========================================
-
-        boxes = pred[:, :4]
-
-        class_scores = pred[:, 4:]        
-
-        cls_scores = np.max(class_scores, axis=1)
-
-        print("CLASS MAX :", float(np.max(class_scores)))
-        print("CLASS MIN :", float(np.min(class_scores)))
-        print("TOP CLASS :", int(np.argmax(cls_scores)))
-        print("TOP SCORE :", float(np.max(cls_scores)))
-
-        cls_ids = np.argmax(class_scores, axis=1)
-
-        best_idx = int(np.argmax(cls_scores))
-
-        best_score = float(cls_scores[best_idx])
-
-        best_box = boxes[best_idx]
-
-        best_cls = int(cls_ids[best_idx])
-
-
-        print()
-        print("BEST DETECTION")
-        print("BOX :", np.round(best_box, 4))
-        print("CLASS :", best_cls)
-        print("SCORE :", round(best_score, 4))
-        print("=" * 60)
-
-
-        print("BEST INDEX :", best_idx)
-        print("MAX OUTPUT :", round(float(np.max(pred)), 4))
-        print("MIN OUTPUT :", round(float(np.min(pred)), 4))
-
-
-        # =====================
-        # 검출 없음
-        # =====================
-
-        if best_score < 0.10:
-
             return {
-                "success": True,
+
+                "success": False,
+
                 "crop": crop,
-                "disease": "알 수 없음",
+
+                "disease": "분석시간초과",
+
                 "confidence": 0,
+
                 "risk": "UNKNOWN",
+
                 "time": elapsed
+
             }
 
+        # =====================
+        # RESULT
+        # =====================
 
-        # =====================
-        # 최종 결과
-        # =====================
+        result = results[0]
+
+        probs = result.probs
+
+        # 전체 클래스 확률
+        all_probs = probs.data.cpu().numpy()
+
+        print("==============================")
+        print("TOP5 PREDICTIONS")
+
+        top5 = np.argsort(all_probs)[::-1][:5]
+
+        for idx in top5:
+            print(
+                f"{idx:2d}",
+                model.names[idx],
+                f"{float(all_probs[idx]) * 100:.2f}%"
+            )
+
+        print("==============================")
+
+        # crop별 허용 클래스
+        allowed_classes = []
+
+        if crop == "고추":
+            allowed_classes = [0, 1]
+
+        elif crop == "블랙커런트":
+            allowed_classes = [2, 3]
+
+        elif crop == "블루베리":
+            allowed_classes = [4, 5]
+
+        elif crop == "사과":
+            allowed_classes = [6, 7, 8]
+
+        elif crop == "아로니아":
+            allowed_classes = [9, 10, 11]
+
+        elif crop == "자두":
+            allowed_classes = [12, 13, 14, 15]
+
+        elif crop == "한라봉":
+            allowed_classes = [16, 17]
+
+        else:
+            print("⚠ 알 수 없는 crop :", crop)
+            allowed_classes = list(range(len(model.names)))
+
+        print("ALLOWED :", allowed_classes)    
+
+        # 허용 클래스 중 최고 확률 찾기
+        best_score = -1.0
+        cls_id = -1
+
+        for idx in allowed_classes:
+
+            score = float(all_probs[idx])
+
+            if score > best_score:
+                best_score = score
+                cls_id = idx
 
         confidence = best_score
 
-        disease = CLASS_NAMES.get(
-            best_cls,
-            "알 수 없음"
-        )
+        disease = model.names[cls_id]
 
-
-        print("CLASS :", best_cls)
-
-        print("DISEASE :", disease)
+        print("==============================")
 
         print(
-            "CONFIDENCE :",
-            round(confidence, 4)
+            "TOP CLASS :",
+            cls_id
         )
 
+        print(
+            "TOP NAME :",
+            disease
+        )
 
-        if confidence >= 0.80:
+        print(
+            "TOP CONF :",
+            round(confidence * 100, 2)
+        )
 
-            risk = "HIGH"
+        print("==============================")
 
-        elif confidence >= 0.50:
+        # =====================
+        # CROP MATCH 검사
+        # =====================
 
-            risk = "MEDIUM"
+        crop_match = True
+
+
+        if crop:
+
+            if not disease.startswith(crop):
+
+                crop_match = False
+
+
+
+       # =====================
+        # CONFIDENCE 보정
+        # =====================
+
+        if confidence < 0.40:
+
+            disease = "판정 불확실"
+
+            disease_id = None
+
+            risk = "UNKNOWN"
 
         else:
 
-            risk = "LOW"
+            if "정상" in disease:
+
+                disease_id = "normal"
+
+                risk = "LOW"
+
+            elif "잉크병" in disease:
+
+                disease_id = "ink_disease"
+
+                risk = "HIGH"
+
+            elif "진딧물" in disease:
+
+                disease_id = "aphid"
+
+                risk = "MEDIUM"
+
+            elif "병징" in disease:
+
+                disease_id = None
+
+                risk = "MEDIUM"
+
+            else:
+
+                disease_id = None
+
+                risk = "UNKNOWN"
 
 
+        print(
+            "DISEASE ID :",
+            disease_id
+        )
+
+
+        print(
+            "CROP MATCH :",
+            crop_match
+        )
+
+
+        print(
+            "FINAL DISEASE :",
+            disease
+        )
+
+        # =====================
+        # FIREBASE INFO 조회
+        # =====================
+
+        disease_info = None
+
+        if disease_id is not None:
+
+            print(
+                "CHECK DISEASE ID:",
+                disease_id
+            )
+
+            print(
+                "CHECK CROP:",
+                crop
+            )
+
+            disease_info = get_disease_info(
+                crop,
+                disease_id
+            )
+
+            print(
+                "FIREBASE INFO :",
+                disease_info
+            )
+
+
+        print(
+            "FINAL RISK :",
+            risk
+        )
+
+
+        print("==============================")
+
+        # =====================
+        # FIREBASE SEARCH NAME
+        # =====================
+
+        firebase_disease_name = disease
+
+
+        if disease == "판정 불확실":
+
+            firebase_disease_name = model.names[cls_id].replace(
+                crop + "_",
+                ""
+            )
+
+        # =====================
+        # FIREBASE DISEASE INFO
+        # =====================
+
+        disease_info = None
+
+        if disease_id is not None:
+
+            print(
+                "CHECK DISEASE ID:",
+                disease_id
+            )
+
+            print(
+                "CHECK CROP:",
+                crop
+            )
+
+            doc = (
+                db.collection("crops")
+                .document(crop)
+                .collection("diseases")
+                .document(disease_id)
+                .get()
+            )
+
+            if doc.exists:
+
+                disease_info = doc.to_dict()
+
+            print(
+                "FIREBASE INFO:",
+                disease_info
+            )
 
         return {
 
@@ -368,9 +550,16 @@ async def predict(
 
             "disease": disease,
 
-            "confidence": round(confidence, 2),
+            "confidence": round(
+                confidence * 100,
+                2
+            ),
 
             "risk": risk,
+
+            "crop_match": crop_match,
+
+            "info": disease_info,
 
             "time": elapsed
 
@@ -378,29 +567,32 @@ async def predict(
 
     except Exception as e:
 
-
-        print("######## ERROR ########")
+        print(
+            "🔥 ERROR:",
+            e
+        )
 
         traceback.print_exc()
 
-
         return {
 
-            "success":False,
+            "success": False,
 
-            "crop":crop,
+            "crop": crop,
 
-            "disease":"분석 실패",
+            "disease": "분석 실패",
 
-            "confidence":0,
+            "confidence": 0,
 
-            "risk":"UNKNOWN",
+            "risk": "UNKNOWN",
 
-            "error":str(e)
+            "error": str(e)
 
         }
 
+
 if __name__ == "__main__":
+
     import uvicorn
 
     uvicorn.run(
@@ -408,5 +600,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=False
-    )         
-
+    )
