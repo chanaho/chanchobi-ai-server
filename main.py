@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 
 import os
+import json
 import time
 import traceback
 import cv2
@@ -20,15 +21,13 @@ app = FastAPI()
 # Firebase 초기화
 
 if not firebase_admin._apps:
-
+    firebase_json = os.environ.get("FIREBASE_KEY")
     cred = credentials.Certificate(
-        "firebase-key.json"
+        json.loads(firebase_json)
     )
-
     firebase_admin.initialize_app(
         cred
     )
-
 
 db = firestore.client()
 
