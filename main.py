@@ -4,6 +4,7 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
+import torch
 
 import os
 import json
@@ -12,42 +13,30 @@ import traceback
 import cv2
 import numpy as np
 
-
 cv2.setNumThreads(1)
-
 
 app = FastAPI()
 
 # Firebase 초기화
 
 if not firebase_admin._apps:
-
     firebase_json = os.environ.get("FIREBASE_KEY")
-
     if firebase_json:
-
         cred = credentials.Certificate(
             json.loads(firebase_json)
         )
-
         firebase_admin.initialize_app(
             cred
         )
-
     elif os.path.exists("firebase-key.json"):
-
         cred = credentials.Certificate(
             "firebase-key.json"
         )
-
         firebase_admin.initialize_app(
             cred
         )
-
     else:
-
         print("⚠ FIREBASE 인증키 없음")
-
 
 if firebase_admin._apps:
 
@@ -72,58 +61,38 @@ def get_disease_info(crop, disease_id):
             .document(disease_id)
             .get()
         )
-
-
         if doc.exists:
-
             return doc.to_dict()
-
-
         return None
-
-
     except Exception as e:
-
         print(
             "FIREBASE ERROR:",
             e
         )
-
         return None
 
 # =========================
 # AI 모델 로드
 # =========================
 
-print("🔥 LOADING MODEL...")
-
-
+torch.set_num_threads(1)
+torch.set_grad_enabled(False)
 print("🔥 LOADING CLASSIFICATION MODEL")
-
-
 MODEL_PATH = "models/chanchobi_cls_best.pt"
-
 if not os.path.exists(MODEL_PATH):
-
-    print("❌ MODEL FILE NOT FOUND :", MODEL_PATH)
-
+    print(
+        "❌ MODEL FILE NOT FOUND :",
+        MODEL_PATH
+    )
     exit()
 
-
-model = YOLO(
-    MODEL_PATH
-)
-
+model = YOLO(MODEL_PATH, task="classify")   
 
 print("🔥 MODEL LOADED")
-
-
 print(
     "MODEL NAMES :",
     model.names
 )
-
-
 
 # =========================
 # CORS
@@ -160,13 +129,9 @@ os.makedirs(
 
 )
 
-
-
 # =========================
 # ROOT
 # =========================
-
-
 @app.get("/")
 def root():
 
@@ -177,8 +142,6 @@ def root():
         "classes": model.names
 
     }
-
-
 
 @app.get("/health")
 def health():
@@ -210,19 +173,17 @@ async def predict(
         if crop is None:
             crop = ""
 
-        crop = crop.strip()  
-
+        crop = crop.strip()
         print("FINAL CROP :", crop)
 
-
         contents = await file.read()
-
-
         img = cv2.imdecode(
             np.frombuffer(contents, np.uint8),
             cv2.IMREAD_COLOR
         )
 
+        if img.flags.writeable:
+            img = img.copy()
 
         if img is None:
 
@@ -236,12 +197,9 @@ async def predict(
                 "risk": "UNKNOWN"
             }
 
-
         print("✅ IMAGE DECODE SUCCESS")
 
-
         h, w = img.shape[:2]
-
 
         print(
             "IMAGE SIZE :",
@@ -250,19 +208,16 @@ async def predict(
             h
         )
 
-
         img = cv2.resize(
             img,
-            (640,640),
+            (512,512),
             interpolation=cv2.INTER_AREA
         )
-
 
         print(
             "FINAL IMAGE :",
             img.shape
         )
-
 
         # =====================
         # YOLO CLASSIFICATION
@@ -270,48 +225,36 @@ async def predict(
 
         print("🔥 BEFORE MODEL")
 
-
         t1 = time.time()
 
-
-        results = model.predict(
-            source=img,
-            imgsz=640,
-            verbose=False
-        )
-
+        with torch.inference_mode():
+            results = model.predict(
+                source=img,
+                imgsz=512,
+                verbose=False,
+                device="cpu"
+            )
 
         t2 = time.time()
-
 
         elapsed = round(
             t2 - t1,
             2
         )
 
-
         print(
             "YOLO TIME :",
             elapsed
         )
 
-
         if elapsed > 30:
-
             return {
-
                 "success": False,
-
                 "crop": crop,
-
                 "disease": "분석시간초과",
-
                 "confidence": 0,
-
                 "risk": "UNKNOWN",
-
                 "time": elapsed
-
             }
 
         # =====================
@@ -418,8 +361,7 @@ async def predict(
                 crop_match = False
 
 
-
-       # =====================
+        # =====================
         # CONFIDENCE 보정
         # =====================
 
@@ -515,7 +457,6 @@ async def predict(
             risk
         )
 
-
         print("==============================")
 
         # =====================
@@ -568,26 +509,17 @@ async def predict(
             )
 
         return {
-
             "success": True,
-
             "crop": crop,
-
             "disease": disease,
-
             "confidence": round(
                 confidence * 100,
                 2
             ),
-
             "risk": risk,
-
             "crop_match": crop_match,
-
             "info": disease_info,
-
             "time": elapsed
-
         }
 
     except Exception as e:
@@ -600,21 +532,13 @@ async def predict(
         traceback.print_exc()
 
         return {
-
             "success": False,
-
             "crop": crop,
-
             "disease": "분석 실패",
-
             "confidence": 0,
-
             "risk": "UNKNOWN",
-
             "error": str(e)
-
         }
-
 
 if __name__ == "__main__":
 

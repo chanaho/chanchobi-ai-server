@@ -14,7 +14,3 @@ opencv-python-headless
 python-dotenv
 
 firebase-admin
-
-onnx
-onnxruntime
-onnxslim
