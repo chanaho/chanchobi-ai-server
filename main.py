@@ -78,6 +78,10 @@ def get_disease_info(crop, disease_id):
 
 torch.set_num_threads(1)
 torch.set_grad_enabled(False)
+
+import gc
+gc.collect()
+
 print("🔥 LOADING CLASSIFICATION MODEL")
 MODEL_PATH = "models/chanchobi_cls_best.pt"
 if not os.path.exists(MODEL_PATH):
@@ -88,7 +92,9 @@ if not os.path.exists(MODEL_PATH):
     exit()
 
 model = YOLO(MODEL_PATH, task="classify")
-model.to("cpu")   
+model.to("cpu")
+
+gc.collect()
 
 print("🔥 MODEL LOADED")
 print(
