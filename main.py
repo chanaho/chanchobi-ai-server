@@ -165,10 +165,12 @@ def health():
 # =========================
 
 @app.post("/predict")
-async def predict(
+async def predict(    
     file: UploadFile = File(...),
     crop: str = Form(None)
 ):
+
+    print("🔥 PREDICT START")
 
     try:
 
