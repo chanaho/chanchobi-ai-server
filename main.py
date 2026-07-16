@@ -242,8 +242,10 @@ async def predict(
                 conf=0.25,
                 verbose=False,
                 device="cpu",
-                stream=False
+                stream=True
             )
+
+        results = list(results)    
 
         t2 = time.time()
 
