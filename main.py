@@ -10,6 +10,7 @@ import os
 import json
 import time
 import traceback
+import gc
 import cv2
 import numpy as np
 
@@ -86,7 +87,8 @@ if not os.path.exists(MODEL_PATH):
     )
     exit()
 
-model = YOLO(MODEL_PATH, task="classify")   
+model = YOLO(MODEL_PATH, task="classify")
+model.to("cpu")   
 
 print("🔥 MODEL LOADED")
 print(
@@ -210,7 +212,7 @@ async def predict(
 
         img = cv2.resize(
             img,
-            (512,512),
+            (416,416),
             interpolation=cv2.INTER_AREA
         )
 
@@ -230,9 +232,11 @@ async def predict(
         with torch.inference_mode():
             results = model.predict(
                 source=img,
-                imgsz=512,
+                imgsz=416,
+                conf=0.25,
                 verbose=False,
-                device="cpu"
+                device="cpu",
+                stream=False
             )
 
         t2 = time.time()
@@ -241,6 +245,11 @@ async def predict(
             t2 - t1,
             2
         )
+
+        gc.collect()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         print(
             "YOLO TIME :",
@@ -392,6 +401,12 @@ async def predict(
                 disease_id = "aphid"
 
                 risk = "MEDIUM"
+
+            elif "탄저병" in disease:
+
+                disease_id = "anthracnose" 
+
+                risk = "HIGH"   
 
             elif "병징" in disease:
 
