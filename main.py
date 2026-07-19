@@ -82,7 +82,6 @@ torch.set_grad_enabled(False)
 import gc
 gc.collect()
 
-print("🔥 LOADING CLASSIFICATION MODEL")
 MODEL_PATH = "models/chanchobi_cls_best.pt"
 if not os.path.exists(MODEL_PATH):
     print(
@@ -91,16 +90,23 @@ if not os.path.exists(MODEL_PATH):
     )
     exit()
 
-model = YOLO(MODEL_PATH, task="classify")
-model.to("cpu")
+model = None
 
-gc.collect()
+def get_model():
+    global model
 
-print("🔥 MODEL LOADED")
-print(
-    "MODEL NAMES :",
-    model.names
-)
+    if model is None:
+        print("🔥 LOADING CLASSIFICATION MODEL")
+
+        model = YOLO(MODEL_PATH, task="classify")
+        model.to("cpu")
+
+        gc.collect()
+
+        print("🔥 MODEL LOADED")
+        print("MODEL NAMES :", model.names)
+
+    return model
 
 # =========================
 # CORS
@@ -237,6 +243,8 @@ async def predict(
 
         t1 = time.time()
 
+        model = get_model()
+
         with torch.inference_mode():
             results = model.predict(
                 source=img,
@@ -244,10 +252,8 @@ async def predict(
                 conf=0.25,
                 verbose=False,
                 device="cpu",
-                stream=True
-            )
-
-        results = list(results)    
+                stream=False
+            )           
 
         t2 = time.time()
 
