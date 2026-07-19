@@ -149,11 +149,13 @@ os.makedirs(
 @app.get("/")
 def root():
 
+    mdl = get_model()
+
     return {
 
         "status": "AI SERVER RUNNING",
 
-        "classes": model.names
+        "classes": mdl.names
 
     }
 
