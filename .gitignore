@@ -16,3 +16,4 @@ firebase-key.json
 .env*.local
 !dataset_new/
 !dataset_new/dataset.yaml
+!runtime.txt
