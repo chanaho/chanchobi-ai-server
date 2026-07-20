@@ -1,3 +1,9 @@
+import os
+
+# Render 메모리 및 설정 최적화
+os.environ["MPLCONFIGDIR"] = "/tmp"
+os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
+
 from fastapi import FastAPI, UploadFile, File, Form
 import firebase_admin
 from firebase_admin import credentials
@@ -6,7 +12,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 import torch
 
-import os
 import json
 import time
 import traceback
