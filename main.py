@@ -1,4 +1,5 @@
 import os
+import psutil
 
 # Render 메모리 및 설정 최적화
 os.environ["MPLCONFIGDIR"] = "/tmp"
@@ -110,6 +111,14 @@ def get_model():
 
         print("🔥 MODEL LOADED")
         print("MODEL NAMES :", model.names)
+
+        process = psutil.Process(os.getpid())
+
+        print(
+            "MEMORY :",
+            round(process.memory_info().rss / 1024 / 1024, 1),
+            "MB"
+        )
 
     return model
 
