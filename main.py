@@ -10,8 +10,7 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 from fastapi.middleware.cors import CORSMiddleware
-from ultralytics import YOLO
-import torch
+import onnxruntime as ort
 
 import json
 import time
@@ -88,7 +87,7 @@ torch.set_grad_enabled(False)
 import gc
 gc.collect()
 
-MODEL_PATH = "models/chanchobi_cls_best.pt"
+MODEL_PATH = "models/chanchobi_cls_best.onnx"
 if not os.path.exists(MODEL_PATH):
     print(
         "❌ MODEL FILE NOT FOUND :",
@@ -96,45 +95,29 @@ if not os.path.exists(MODEL_PATH):
     )
     exit()
 
-model = None
+session = None
 
 def get_model():
-    global model
+    global session
 
-    if model is None:
-        print("🔥 LOADING CLASSIFICATION MODEL")
+    if session is None:
+        print("🔥 LOADING ONNX MODEL")
 
-        model = YOLO(MODEL_PATH, task="classify")
+        session = ort.InferenceSession(
+            MODEL_PATH,
+            providers=["CPUExecutionProvider"]
+        )
 
         process = psutil.Process(os.getpid())
         print(
-            "MEMORY AFTER YOLO LOAD :",
+            "MEMORY AFTER ONNX LOAD :",
             round(process.memory_info().rss / 1024 / 1024, 1),
             "MB"
         )
 
-        model.to("cpu")
+        print("🔥 ONNX MODEL LOADED")
 
-        process = psutil.Process(os.getpid())
-        print(
-            "MEMORY AFTER model.to(cpu) :",
-            round(process.memory_info().rss / 1024 / 1024, 1),
-            "MB"
-        )
-
-        gc.collect()
-
-        process = psutil.Process(os.getpid())
-        print(
-            "MEMORY AFTER gc.collect() :",
-            round(process.memory_info().rss / 1024 / 1024, 1),
-            "MB"
-        )
-
-        print("🔥 MODEL LOADED")
-        print("MODEL NAMES :", model.names)
-
-    return model
+    return session
 
 # =========================
 # CORS
@@ -177,13 +160,13 @@ os.makedirs(
 @app.get("/")
 def root():
 
-    mdl = get_model()
+    get_model()
 
     return {
 
         "status": "AI SERVER RUNNING",
 
-        "classes": mdl.names
+        "classes": CLASS_NAMES
 
     }
 
@@ -260,6 +243,15 @@ async def predict(
             interpolation=cv2.INTER_AREA
         )
 
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        input_tensor = img.astype(np.float32) / 255.0
+
+
+        input_tensor = np.transpose(input_tensor, (2, 0, 1))
+
+        input_tensor = np.expand_dims(input_tensor, axis=0)
+
         print(
             "FINAL IMAGE :",
             img.shape
@@ -269,21 +261,20 @@ async def predict(
         # YOLO CLASSIFICATION
         # =====================
 
-        print("🔥 BEFORE MODEL")
-
-        print(f"MEMORY BEFORE PREDICT : {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
+        print("🔥 BEFORE ONNX")
 
         t1 = time.time()
 
-        model = get_model()
+        session = get_model()
 
-        with torch.inference_mode():
-            results = model(
-                img,
-                imgsz=224,
-                verbose=False,
-                device="cpu"
-            )           
+        input_name = session.get_inputs()[0].name
+
+        outputs = session.run(
+            None,
+            {
+                input_name: input_tensor
+            }
+        )
 
         t2 = time.time()
 
@@ -292,15 +283,12 @@ async def predict(
             2
         )
 
-        gc.collect()
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
         print(
-            "YOLO TIME :",
+            "ONNX TIME :",
             elapsed
         )
+
+        all_probs = outputs[0][0]
 
         if elapsed > 30:
             return {
@@ -315,13 +303,6 @@ async def predict(
         # =====================
         # RESULT
         # =====================
-
-        result = results[0]
-
-        probs = result.probs
-
-        # 전체 클래스 확률
-        all_probs = probs.data.cpu().numpy()
 
         print("==============================")
         print("TOP5 PREDICTIONS")
