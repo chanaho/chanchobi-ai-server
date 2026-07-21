@@ -86,6 +86,28 @@ import psutil
 import onnxruntime as ort
 
 MODEL_PATH = "models/chanchobi_cls_best.onnx"
+
+CLASS_NAMES = [
+    "고추_정상",
+    "고추_탄저병",
+    "블랙커런트_병징",
+    "블랙커런트_정상",
+    "블루베리_병징",
+    "블루베리_정상",
+    "사과_병징",
+    "사과_정상",
+    "사과_탄저병",
+    "아로니아_병징",
+    "아로니아_정상",
+    "아로니아_진딧물",
+    "자두_병징",
+    "자두_잉크병",
+    "자두_정상",
+    "자두_진딧물",
+    "한라봉_병징",
+    "한라봉_정상"
+]
+
 if not os.path.exists(MODEL_PATH):
     print(
         "❌ MODEL FILE NOT FOUND :",
@@ -95,10 +117,12 @@ if not os.path.exists(MODEL_PATH):
 
 session = None
 
+
 def get_model():
     global session
 
     if session is None:
+
         print("🔥 LOADING ONNX MODEL")
 
         session = ort.InferenceSession(
@@ -107,16 +131,20 @@ def get_model():
         )
 
         process = psutil.Process(os.getpid())
+
         print(
             "MEMORY AFTER ONNX LOAD :",
-            round(process.memory_info().rss / 1024 / 1024, 1),
+            round(
+                process.memory_info().rss / 1024 / 1024,
+                1
+            ),
             "MB"
         )
 
         print("🔥 ONNX MODEL LOADED")
 
     return session
-
+    
 # =========================
 # CORS
 # =========================
@@ -182,7 +210,7 @@ def health():
 # =========================
 
 @app.post("/predict")
-async def predict(    
+async def predict(
     file: UploadFile = File(...),
     crop: str = Form(None)
 ):
@@ -193,9 +221,7 @@ async def predict(
 
         print("==============================")
         print("🔥 NEW REQUEST")
-
         print("RECEIVED CROP :", crop)
-
 
         if crop is None:
             crop = ""
@@ -204,13 +230,11 @@ async def predict(
         print("FINAL CROP :", crop)
 
         contents = await file.read()
+
         img = cv2.imdecode(
             np.frombuffer(contents, np.uint8),
             cv2.IMREAD_COLOR
         )
-
-        if img.flags.writeable:
-            img = img.copy()
 
         if img is None:
 
@@ -223,6 +247,9 @@ async def predict(
                 "confidence": 0,
                 "risk": "UNKNOWN"
             }
+
+        if img.flags.writeable:
+            img = img.copy()
 
         print("✅ IMAGE DECODE SUCCESS")
 
@@ -237,18 +264,26 @@ async def predict(
 
         img = cv2.resize(
             img,
-            (416,416),
+            (416, 416),
             interpolation=cv2.INTER_AREA
         )
 
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2RGB
+        )
 
         input_tensor = img.astype(np.float32) / 255.0
 
+        input_tensor = np.transpose(
+            input_tensor,
+            (2, 0, 1)
+        )
 
-        input_tensor = np.transpose(input_tensor, (2, 0, 1))
-
-        input_tensor = np.expand_dims(input_tensor, axis=0)
+        input_tensor = np.expand_dims(
+            input_tensor,
+            axis=0
+        )
 
         print(
             "FINAL IMAGE :",
@@ -256,7 +291,7 @@ async def predict(
         )
 
         # =====================
-        # YOLO CLASSIFICATION
+        # ONNX CLASSIFICATION
         # =====================
 
         print("🔥 BEFORE ONNX")
@@ -308,9 +343,10 @@ async def predict(
         top5 = np.argsort(all_probs)[::-1][:5]
 
         for idx in top5:
+
             print(
                 f"{idx:2d}",
-                model.names[idx],
+                CLASS_NAMES[idx],
                 f"{float(all_probs[idx]) * 100:.2f}%"
             )
 
@@ -341,10 +377,17 @@ async def predict(
             allowed_classes = [16, 17]
 
         else:
-            print("⚠ 알 수 없는 crop :", crop)
-            allowed_classes = list(range(len(model.names)))
 
-        print("ALLOWED :", allowed_classes)    
+            print("⚠ 알 수 없는 crop :", crop)
+
+            allowed_classes = list(
+                range(len(CLASS_NAMES))
+            )
+
+        print(
+            "ALLOWED :",
+            allowed_classes
+        )
 
         # 허용 클래스 중 최고 확률 찾기
         best_score = -1.0
@@ -360,7 +403,7 @@ async def predict(
 
         confidence = best_score
 
-        disease = model.names[cls_id]
+        disease = CLASS_NAMES[cls_id]
 
         print("==============================")
 
@@ -387,13 +430,9 @@ async def predict(
 
         crop_match = True
 
-
         if crop:
-
             if not disease.startswith(crop):
-
                 crop_match = False
-
 
         # =====================
         # CONFIDENCE 보정
@@ -402,9 +441,7 @@ async def predict(
         if confidence < 0.40:
 
             disease = "판정 불확실"
-
             disease_id = None
-
             risk = "UNKNOWN"
 
         else:
@@ -412,51 +449,42 @@ async def predict(
             if "정상" in disease:
 
                 disease_id = "normal"
-
                 risk = "LOW"
 
             elif "잉크병" in disease:
 
                 disease_id = "ink_disease"
-
                 risk = "HIGH"
 
             elif "진딧물" in disease:
 
                 disease_id = "aphid"
-
                 risk = "MEDIUM"
 
             elif "탄저병" in disease:
 
-                disease_id = "anthracnose" 
-
-                risk = "HIGH"   
+                disease_id = "anthracnose"
+                risk = "HIGH"
 
             elif "병징" in disease:
 
                 disease_id = None
-
                 risk = "MEDIUM"
 
             else:
 
                 disease_id = None
-
                 risk = "UNKNOWN"
-
 
         print(
             "DISEASE ID :",
             disease_id
         )
 
-
         print(
             "CROP MATCH :",
             crop_match
         )
-
 
         print(
             "FINAL DISEASE :",
@@ -491,7 +519,6 @@ async def predict(
                 disease_info
             )
 
-
         print(
             "FINAL RISK :",
             risk
@@ -505,10 +532,9 @@ async def predict(
 
         firebase_disease_name = disease
 
-
         if disease == "판정 불확실":
 
-            firebase_disease_name = model.names[cls_id].replace(
+            firebase_disease_name = CLASS_NAMES[cls_id].replace(
                 crop + "_",
                 ""
             )
@@ -540,7 +566,6 @@ async def predict(
             )
 
             if doc.exists:
-
                 disease_info = doc.to_dict()
 
             print(
@@ -579,6 +604,7 @@ async def predict(
             "risk": "UNKNOWN",
             "error": str(e)
         }
+
 
 if __name__ == "__main__":
 
