@@ -262,13 +262,11 @@ async def predict(
         model = get_model()
 
         with torch.inference_mode():
-            results = model.predict(
-                source=img,
-                imgsz=416,
-                conf=0.25,
+            results = model(
+                img,
+                imgsz=224,
                 verbose=False,
-                device="cpu",
-                stream=False
+                device="cpu"
             )           
 
         t2 = time.time()
