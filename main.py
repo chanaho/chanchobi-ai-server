@@ -105,20 +105,34 @@ def get_model():
         print("🔥 LOADING CLASSIFICATION MODEL")
 
         model = YOLO(MODEL_PATH, task="classify")
-        model.to("cpu")
-
-        gc.collect()
-
-        print("🔥 MODEL LOADED")
-        print("MODEL NAMES :", model.names)
 
         process = psutil.Process(os.getpid())
-
         print(
-            "MEMORY :",
+            "MEMORY AFTER YOLO LOAD :",
             round(process.memory_info().rss / 1024 / 1024, 1),
             "MB"
         )
+
+        model.to("cpu")
+
+        process = psutil.Process(os.getpid())
+        print(
+            "MEMORY AFTER model.to(cpu) :",
+            round(process.memory_info().rss / 1024 / 1024, 1),
+            "MB"
+        )
+
+        gc.collect()
+
+        process = psutil.Process(os.getpid())
+        print(
+            "MEMORY AFTER gc.collect() :",
+            round(process.memory_info().rss / 1024 / 1024, 1),
+            "MB"
+        )
+
+        print("🔥 MODEL LOADED")
+        print("MODEL NAMES :", model.names)
 
     return model
 
@@ -256,6 +270,8 @@ async def predict(
         # =====================
 
         print("🔥 BEFORE MODEL")
+
+        print(f"MEMORY BEFORE PREDICT : {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
 
         t1 = time.time()
 
