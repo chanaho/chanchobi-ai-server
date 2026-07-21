@@ -81,11 +81,9 @@ def get_disease_info(crop, disease_id):
 # AI 모델 로드
 # =========================
 
-torch.set_num_threads(1)
-torch.set_grad_enabled(False)
-
 import gc
-gc.collect()
+import psutil
+import onnxruntime as ort
 
 MODEL_PATH = "models/chanchobi_cls_best.onnx"
 if not os.path.exists(MODEL_PATH):
