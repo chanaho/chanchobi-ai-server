@@ -1,9 +1,9 @@
 from ultralytics import YOLO
 
-model = YOLO("model/best.pt")
+model = YOLO("models/chanchobi_cls_best.pt")
 
 model.export(
     format="onnx",
-    imgsz=640,
+    imgsz=416,
     simplify=True
 )
