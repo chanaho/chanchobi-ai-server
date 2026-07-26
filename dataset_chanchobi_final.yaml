@@ -1,0 +1,10 @@
+path: ./dataset_chanchobi_final
+
+train: images/train
+val: images/val
+
+nc: 2
+
+names:
+  0: 고추_탄저병
+  1: 사과_갈색무늬병  
