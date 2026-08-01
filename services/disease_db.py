@@ -6,13 +6,11 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
 DISEASE_CACHE = {}
-
+DB_VERSION = "20260801"
 
 def load_json_database():
     global DISEASE_CACHE
-
-    if DISEASE_CACHE:
-        return DISEASE_CACHE
+    
 
     db_path = os.path.join(
         BASE_DIR,
