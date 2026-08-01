@@ -55,13 +55,18 @@ class Predictor:
 
         return {
             "status": "success",
-            "label": label,
-            "disease": info["name"],
             "crop": info["crop"],
+            "disease": info["name"],
+            "confidence": round(conf * 100, 2),
             "risk": info["risk"],
-            "confidence": round(confidence, 2),
-            "chemical": info.get("chemical"),
-            "method": info.get("method"),
-            "note": info.get("note"),
-            "warning": info.get("warning")
+            "chemical": info.get("chemical", []),
+            "method": info.get("method", ""),
+            "note": info.get("note", ""),
+            "warning": info.get("warning", ""),
+            "symptom": info.get("symptom", []),
+            "cause": info.get("cause", ""),
+            "condition": info.get("condition", []),
+            "prevention": info.get("prevention", []),
+            "spray_time": info.get("spray_time", []),
+            "pesticides": info.get("pesticides", [])
         }
