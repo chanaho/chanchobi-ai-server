@@ -1,16 +1,16 @@
 import os
 import json
 
-
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-
+BASE_DIR = os.path.dirname(
+    os.path.dirname(__file__)
+)
 
 DISEASE_CACHE = {}
-DB_VERSION = "20260801"
+
 
 def load_json_database():
+
     global DISEASE_CACHE
-    
 
     db_path = os.path.join(
         BASE_DIR,
@@ -18,8 +18,8 @@ def load_json_database():
     )
 
     if not os.path.exists(db_path):
-        print("⚠️ disease_db folder not found")
-        return {}
+        print("⚠ disease_db folder not found")
+        return
 
     for filename in os.listdir(db_path):
 
@@ -31,6 +31,7 @@ def load_json_database():
             )
 
             try:
+
                 with open(
                     file_path,
                     "r",
@@ -38,211 +39,58 @@ def load_json_database():
                 ) as f:
 
                     data = json.load(f)
-                    print("===================================")
-                    print("FILE :", file_path)
-                    print("INK PESTICIDES :")
-
-                   for d in data["diseases"]:
-                       if d["id"] == "ink_disease":
-                          print(d["pesticides"])
-
-                    print("===================================")
 
                 crop = data.get(
                     "crop",
                     ""
                 )
 
-                for disease in data.get(
+                for d in data.get(
                     "diseases",
                     []
                 ):
 
-                    disease_id = disease.get(
-                        "id",
-                        ""
+                    key = (
+                        crop,
+                        d.get("id")
                     )
 
-                    name = disease.get(
-                        "name",
-                        ""
-                    )
+                    DISEASE_CACHE[key] = d
 
-                    key = f"{crop}_{name}"
-
-                    DISEASE_CACHE[key] = disease
-
-                    if disease_id:
-                        DISEASE_CACHE[disease_id] = disease
 
                 print(
-                    "✅ LOAD DB:",
+                    "LOAD:",
                     filename
                 )
 
+
             except Exception as e:
+
                 print(
-                    "❌ DB LOAD ERROR:",
-                    filename,
+                    "JSON LOAD ERROR:",
                     e
                 )
 
-    return DISEASE_CACHE
+
+load_json_database()
+
 
 
 def get_disease_info(
-    label: str,
-    crop: str = "unknown"
+    crop,
+    disease_id
 ):
 
-    db = load_json_database()
+    key = (
+        crop,
+        disease_id
+    )
 
+    info = DISEASE_CACHE.get(
+        key
+    )
 
-    # 1. crop + name 검색
-    if crop != "unknown":
+    if info:
+        return info
 
-        key = f"{crop}_{label}"
-
-        if key in db:
-            return normalize(
-                db[key],
-                crop
-            )
-
-
-    # 2. id 검색
-    if label in db:
-
-        return normalize(
-            db[label],
-            crop
-        )
-
-
-    # 3. 이름 포함 검색
-
-    for key, value in db.items():
-
-        if value.get("name") == label:
-
-            return normalize(
-                value,
-                crop
-            )
-
-
-    # 4. 실패
-
-    return {
-
-        "name": label,
-
-        "crop": crop,
-
-        "risk": "UNKNOWN",
-
-        "chemical": [],
-
-        "method": "",
-
-        "note": "",
-
-        "warning": "",
-
-        "cause": "",
-
-        "condition": [],
-
-        "prevention": [],
-
-        "spray_time": [],
-
-        "pesticides": []
-
-    }
-
-
-
-def normalize(
-    data,
-    crop
-):
-
-    return {
-
-        "name":
-            data.get(
-                "name",
-                ""
-            ),
-
-        "crop":
-            crop,
-
-        "risk":
-            data.get(
-                "risk",
-                "UNKNOWN"
-            ),
-
-        "chemical":
-            data.get(
-                "chemical",
-                []
-            ),
-
-        "method":
-            data.get(
-                "method",
-                ""
-            ),
-
-        "note":
-            data.get(
-                "note",
-                ""
-            ),
-
-        "warning":
-            data.get(
-                "warning",
-                ""
-            ),
-
-        "symptom":
-            data.get(
-                "symptom",
-                []
-            ),
-
-        "cause":
-            data.get(
-                "cause",
-                ""
-            ),
-
-        "condition":
-            data.get(
-                "condition",
-                []
-            ),
-
-        "prevention":
-            data.get(
-                "prevention",
-                []
-            ),
-
-        "spray_time":
-            data.get(
-                "spray_time",
-                []
-            ),
-
-        "pesticides":
-            data.get(
-                "pesticides",
-                []
-
-            )
-    }
+    return None
