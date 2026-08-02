@@ -38,6 +38,15 @@ def load_json_database():
                 ) as f:
 
                     data = json.load(f)
+                    print("===================================")
+                    print("FILE :", file_path)
+                    print("INK PESTICIDES :")
+
+                   for d in data["diseases"]:
+                       if d["id"] == "ink_disease":
+                          print(d["pesticides"])
+
+                    print("===================================")
 
                 crop = data.get(
                     "crop",
