@@ -510,8 +510,8 @@ async def predict(
             )
 
             disease_info = get_disease_info(
-                crop,
-                disease_id
+                disease_id,
+                crop
             )
 
             print(
