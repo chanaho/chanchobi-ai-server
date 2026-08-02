@@ -523,33 +523,22 @@ async def predict(
 
         disease_info = None
 
-        if disease_id is not None:
-
-            print(
-                "CHECK DISEASE ID:",
+        try:
+            disease_info = get_disease_info(
+                crop,
                 disease_id
             )
 
             print(
-                "CHECK CROP:",
-                crop
-            )
-
-            doc = (
-                db.collection("crops")
-                .document(crop)
-                .collection("diseases")
-                .document(disease_id)
-                .get()
-            )
-
-            if doc.exists:
-                disease_info = doc.to_dict()
-
-            print(
-                "FIREBASE INFO:",
+                "LOCAL DISEASE INFO:",
                 disease_info
             )
+
+        except Exception as e:
+            print(
+                "LOCAL DB ERROR:",
+                e
+            )            
 
         return {
             "success": True,
