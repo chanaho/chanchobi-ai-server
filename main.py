@@ -19,6 +19,8 @@ import gc
 import cv2
 import numpy as np
 
+from services.disease_db import get_disease_info
+
 cv2.setNumThreads(1)
 
 app = FastAPI()
