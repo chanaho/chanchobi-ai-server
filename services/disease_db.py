@@ -90,6 +90,8 @@ def get_disease_info(
         key
     )
 
+    print("RETURN DISEASE:", info)
+    
     if info:
         return info
 
