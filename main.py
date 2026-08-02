@@ -54,30 +54,6 @@ else:
 
     db = None
 
-# =========================
-# Firebase 질병정보 조회
-# =========================
-
-def get_disease_info(crop, disease_id):
-
-    try:
-
-        doc = (
-            db.collection("crops")
-            .document(crop)
-            .collection("diseases")
-            .document(disease_id)
-            .get()
-        )
-        if doc.exists:
-            return doc.to_dict()
-        return None
-    except Exception as e:
-        print(
-            "FIREBASE ERROR:",
-            e
-        )
-        return None
 
 # =========================
 # AI 모델 로드
