@@ -1,0 +1,46 @@
+{
+    "crop": "아로니아",
+    "version": "1.0",
+    "diseases": [
+        {
+            "id": "normal",
+            "name": "정상",
+            "type": "normal"
+        },
+        {
+            "id": "symptom",
+            "name": "병징",
+            "type": "disease",
+            "risk": "MEDIUM",
+            "symptom": [
+                "잎 변색",
+                "잎 생육 불량",
+                "가지 생육 저하"
+            ],
+            "cause": "병원균 감염 및 재배 환경 영향",
+            "condition": [
+                "고온다습한 환경",
+                "통풍 불량",
+                "과습한 토양"
+            ],
+            "prevention": [
+                "배수 관리",
+                "통풍 개선",
+                "병든 잎 제거"
+            ],
+            "spray_time": [
+                "발생 초기",
+                "장마 전후"
+            ],
+            "pesticides": [
+                {
+                    "name": "등록 약제 확인 필요",
+                    "time": "발생 초기",
+                    "dilution": "등록 기준 준수",
+                    "method": "잎과 줄기 주변 충분히 살포",
+                    "note": "아로니아 등록 약제 확인 후 사용"
+                }
+            ]
+        }
+    ]
+}
