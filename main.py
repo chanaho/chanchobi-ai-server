@@ -11,7 +11,6 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 from fastapi.middleware.cors import CORSMiddleware
 import onnxruntime as ort
-from ultralytics import YOLO
 
 import json
 import time
@@ -63,7 +62,6 @@ else:
 import gc
 import psutil
 import onnxruntime as ort
-from ultralytics import YOLO
 
 MODEL_PATH = "models/chanchobi_cls_best.onnx"
 
@@ -71,9 +69,9 @@ MODEL_PATH = "models/chanchobi_cls_best.onnx"
 # YOLO DETECTION MODEL
 # =========================
 
-PEPPER_MODEL_PATH = "models/pepper_yolo_best.pt"
+PEPPER_MODEL_PATH = "models/pepper_yolo_best.onnx"
 CITRUS_MODEL_PATH = "models/citrus_ulcer_best.pt"
-PEPPER_DISEASE_MODEL_PATH = "models/pepper_a7_a8_best.pt"
+PEPPER_DISEASE_MODEL_PATH = "models/pepper_a7_a8_best.onnx"
 
 CLASS_NAMES = [
     "고추_정상",
@@ -172,76 +170,302 @@ def get_model():
 
 
 # =========================
-# PEPPER YOLO MODEL
 # =========================
+# PEPPER ONNX DETECTION MODELS
+# =========================
+
+PEPPER_CLASS_NAMES = [
+    "검거세미밤나방",
+    "꽃노랑총채벌레",
+    "담배가루이",
+    "담배거세미나방",
+    "담배나방",
+    "도둑나방",
+    "먹노린재",
+    "목화바둑명나방",
+    "무잏벌",
+    "배추좀나방",
+    "배추흰나비",
+    "벼룩잏벌레",
+    "복숭아혹진딧물",
+    "비단노린재",
+    "써덩나무노린재",
+    "알락수염노린재",
+    "열대거세미나방",
+    "큰28점박이무당벌레",
+    "톱다리개미허리노린재",
+    "파밤나방",
+]
+
+PEPPER_DISEASE_CLASS_NAMES = [
+    "고추탄저병",
+    "고추흰가루병",
+]
+
+pepper_model = None
+pepper_disease_model = None
+
+
+def create_onnx_session(model_path, label):
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(model_path)
+
+    print("?? LOADING", label)
+
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+
+    runtime_session = ort.InferenceSession(
+        model_path,
+        sess_options=options,
+        providers=["CPUExecutionProvider"],
+    )
+
+    process = psutil.Process(os.getpid())
+
+    print(
+        "MEMORY AFTER",
+        label,
+        "LOAD :",
+        round(
+            process.memory_info().rss / 1024 / 1024,
+            1,
+        ),
+        "MB",
+    )
+
+    print("??", label, "LOADED")
+
+    return runtime_session
+
 
 def get_pepper_model():
     global pepper_model
 
     if pepper_model is None:
-
-        print("🔥 LOADING PEPPER YOLO MODEL")
-
-        pepper_model = YOLO(
-            PEPPER_MODEL_PATH
-        )
-
-        print(
-            "🔥 PEPPER YOLO MODEL LOADED"
-        )
-
-        print(
-            "PEPPER TASK :",
-            pepper_model.task
-        )
-
-        print(
-            "PEPPER NAMES :",
-            pepper_model.names
+        pepper_model = create_onnx_session(
+            PEPPER_MODEL_PATH,
+            "PEPPER YOLO ONNX MODEL",
         )
 
     return pepper_model
 
 
-# =========================
-# CITRUS YOLO MODEL
-# =========================
-
-
-# =========================
-# PEPPER A7/A8 DISEASE YOLO MODEL
-# =========================
-
 def get_pepper_disease_model():
     global pepper_disease_model
 
     if pepper_disease_model is None:
-        print("🔥 LOADING PEPPER A7/A8 DISEASE MODEL")
-
-        pepper_disease_model = YOLO(
-            PEPPER_DISEASE_MODEL_PATH
-        )
-
-        print(
-            "🔥 PEPPER A7/A8 DISEASE MODEL LOADED"
-        )
-
-        print(
-            "PEPPER DISEASE TASK :",
-            pepper_disease_model.task
-        )
-
-        print(
-            "PEPPER DISEASE NAMES :",
-            pepper_disease_model.names
+        pepper_disease_model = create_onnx_session(
+            PEPPER_DISEASE_MODEL_PATH,
+            "PEPPER A7/A8 ONNX MODEL",
         )
 
     return pepper_disease_model
+
+
+def prepare_yolo_onnx_input(image):
+    target = 416
+
+    height, width = image.shape[:2]
+
+    ratio = min(
+        target / width,
+        target / height,
+    )
+
+    new_width = int(round(width * ratio))
+    new_height = int(round(height * ratio))
+
+    resized = cv2.resize(
+        image,
+        (new_width, new_height),
+        interpolation=cv2.INTER_LINEAR,
+    )
+
+    pad_width = target - new_width
+    pad_height = target - new_height
+
+    left = int(round(pad_width / 2 - 0.1))
+    right = int(round(pad_width / 2 + 0.1))
+    top = int(round(pad_height / 2 - 0.1))
+    bottom = int(round(pad_height / 2 + 0.1))
+
+    padded = cv2.copyMakeBorder(
+        resized,
+        top,
+        bottom,
+        left,
+        right,
+        cv2.BORDER_CONSTANT,
+        value=(114, 114, 114),
+    )
+
+    rgb = cv2.cvtColor(
+        padded,
+        cv2.COLOR_BGR2RGB,
+    )
+
+    tensor = rgb.astype(
+        np.float32
+    ) / 255.0
+
+    tensor = np.transpose(
+        tensor,
+        (2, 0, 1),
+    )
+
+    tensor = np.expand_dims(
+        tensor,
+        axis=0,
+    )
+
+    return tensor
+
+
+def run_yolo_onnx(
+    runtime_session,
+    image,
+    class_names,
+    conf=0.25,
+    iou=0.7,
+):
+    input_meta = runtime_session.get_inputs()[0]
+
+    input_tensor = prepare_yolo_onnx_input(
+        image
+    )
+
+    output_values = runtime_session.run(
+        None,
+        {
+            input_meta.name: input_tensor
+        },
+    )
+
+    output = output_values[0]
+
+    if output.ndim != 3:
+        raise ValueError(
+            f"Unexpected ONNX output shape: {output.shape}"
+        )
+
+    predictions = output[0].transpose(
+        1,
+        0,
+    )
+
+    expected_channels = 4 + len(class_names)
+
+    if predictions.shape[1] != expected_channels:
+        raise ValueError(
+            "Unexpected ONNX channel count: "
+            f"{predictions.shape[1]} "
+            f"(expected {expected_channels})"
+        )
+
+    boxes = predictions[:, :4]
+    class_scores = predictions[:, 4:]
+
+    class_ids = np.argmax(
+        class_scores,
+        axis=1,
+    )
+
+    scores = class_scores[
+        np.arange(class_scores.shape[0]),
+        class_ids,
+    ]
+
+    valid = scores >= conf
+
+    if not np.any(valid):
+        return []
+
+    valid_indices = np.where(valid)[0]
+
+    detections = []
+
+    for class_id in np.unique(
+        class_ids[valid_indices]
+    ):
+        class_indices = valid_indices[
+            class_ids[valid_indices] == class_id
+        ]
+
+        class_boxes = boxes[class_indices]
+        class_scores_values = scores[
+            class_indices
+        ]
+
+        box_list = [
+            [
+                float(box[0]),
+                float(box[1]),
+                float(box[2]),
+                float(box[3]),
+            ]
+            for box in class_boxes
+        ]
+
+        score_list = [
+            float(score)
+            for score in class_scores_values
+        ]
+
+        selected = cv2.dnn.NMSBoxes(
+            box_list,
+            score_list,
+            conf,
+            iou,
+        )
+
+        if selected is None:
+            continue
+
+        selected = np.asarray(
+            selected
+        ).reshape(-1)
+
+        for selected_index in selected:
+            original_index = class_indices[
+                int(selected_index)
+            ]
+
+            cid = int(
+                class_ids[original_index]
+            )
+
+            score = float(
+                scores[original_index]
+            )
+
+            detections.append(
+                {
+                    "id": cid,
+                    "name": class_names[cid],
+                    "confidence": round(
+                        score * 100,
+                        2,
+                    ),
+                }
+            )
+
+    detections.sort(
+        key=lambda item: item["confidence"],
+        reverse=True,
+    )
+
+    return detections[:300]
+
 
 def get_citrus_model():
     global citrus_model
 
     if citrus_model is None:
+        from ultralytics import YOLO
+
 
         print("🔥 LOADING CITRUS YOLO MODEL")
 
@@ -626,93 +850,55 @@ async def predict(
         )
 
         # =========================
-        # PEPPER YOLO DETECTION
         # =========================
+        # PEPPER ONNX DETECTION
+        # =========================
+
+        pepper_detections = []
+        pepper_disease_detections = []
 
         if crop == "고추":
 
             print("==============================")
-            print("🌶️ PEPPER YOLO START")
+            print("??? PEPPER YOLO ONNX START")
 
-            pepper_model = get_pepper_model()
+            pepper_session = get_pepper_model()
 
-            pepper_results = pepper_model.predict(
-                source=original_img,
+            pepper_detections = run_yolo_onnx(
+                pepper_session,
+                original_img,
+                PEPPER_CLASS_NAMES,
                 conf=0.25,
-                verbose=False
+                iou=0.7,
             )
-
-            pepper_detections = []
-
-            for result in pepper_results:
-
-                if result.boxes is None:
-                    continue
-
-                for box in result.boxes:
-
-                    cls_id_yolo = int(
-                        box.cls[0].item()
-                    )
-
-                    conf_yolo = float(
-                        box.conf[0].item()
-                    )
-
-                    class_name_yolo = pepper_model.names[
-                        cls_id_yolo
-                    ]
-
-                    pepper_detections.append({
-                        "id": cls_id_yolo,
-                        "name": class_name_yolo,
-                        "confidence": round(
-                            conf_yolo * 100,
-                            2
-                        )
-                    })
 
             print(
                 "PEPPER YOLO RESULT :",
-                pepper_detections
+                pepper_detections,
             )
 
+            print("==============================")
+            print("??? A7/A8 DISEASE ONNX START")
 
-            # =========================
-            # PEPPER A7/A8 DISEASE YOLO TEST
-            # =========================
-            pepper_disease_model = get_pepper_disease_model()
+            pepper_disease_session = (
+                get_pepper_disease_model()
+            )
 
-            pepper_disease_results = pepper_disease_model.predict(
-                source=original_img,
+            pepper_disease_detections = run_yolo_onnx(
+                pepper_disease_session,
+                original_img,
+                PEPPER_DISEASE_CLASS_NAMES,
                 conf=0.25,
-                verbose=False
+                iou=0.7,
             )
 
-            pepper_disease_detections = []
-
-            for disease_result in pepper_disease_results:
-                if disease_result.boxes is None:
-                    continue
-
-                for box in disease_result.boxes:
-                    cls_id_disease = int(box.cls[0].item())
-                    conf_disease = float(box.conf[0].item())
-                    class_name_disease = pepper_disease_model.names[cls_id_disease]
-
-                    pepper_disease_detections.append({
-                        "id": cls_id_disease,
-                        "name": class_name_disease,
-                        "confidence": round(conf_disease * 100, 2)
-                    })
-
-            print("==============================")
-            print("🌶️ A7/A8 DISEASE RESULT :", pepper_disease_detections)
-            print("==============================")
+            print(
+                "??? A7/A8 DISEASE RESULT :",
+                pepper_disease_detections,
+            )
 
             print("==============================")
 
-            # =========================
         # PEPPER YOLO FINAL RESULT
         # =========================
 
@@ -882,7 +1068,18 @@ async def predict(
             try:
 
                 # YOLO 병해충명 → disease_db 검색명
-                lookup_disease_name = disease.replace(f"{crop}_", "", 1) if disease.startswith(f"{crop}_") else disease
+                if disease == "고추탄저병":
+                    lookup_disease_name = "탄저병"
+                elif disease == "고추흰가루병":
+                    lookup_disease_name = "고추흰가루병"
+                elif disease.startswith(f"{crop}_"):
+                    lookup_disease_name = disease.replace(
+                        f"{crop}_",
+                        "",
+                        1
+                    )
+                else:
+                    lookup_disease_name = disease
 
                 # 현재 crop의 disease_db JSON 탐색
                 db_dir = os.path.join(
@@ -1224,6 +1421,7 @@ if __name__ == "__main__":
         port=8000,
         reload=False
     )
+
 
 
 
