@@ -821,11 +821,23 @@ async def predict(
 
         else:
 
-            print("⚠ 알 수 없는 crop :", crop)
+            print("⛔ AI UNSUPPORTED CROP :", crop)
 
-            allowed_classes = list(
-                range(len(CLASS_NAMES))
-            )
+            return {
+                "success": True,
+                "crop": crop,
+                "disease": "AI 진단 지원 작물 아님",
+                "confidence": 0,
+                "risk": "UNKNOWN",
+                "crop_match": True,
+                "info": None,
+                "pest": None,
+                "pest_confidence": 0,
+                "pest_info": None,
+                "pest_risk": "UNKNOWN",
+                "time": elapsed,
+                "error": "현재 AI 진단 지원 범위에 포함되지 않는 작물입니다."
+            }
 
         print(
             "ALLOWED :",
