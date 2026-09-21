@@ -183,13 +183,13 @@ PEPPER_CLASS_NAMES = [
     "도둑나방",
     "먹노린재",
     "목화바둑명나방",
-    "무잏벌",
+    "무잎벌",
     "배추좀나방",
     "배추흰나비",
-    "벼룩잏벌레",
+    "벼룩잎벌레",
     "복숭아혹진딧물",
     "비단노린재",
-    "써덩나무노린재",
+    "썩덩나무노린재",
     "알락수염노린재",
     "열대거세미나방",
     "큰28점박이무당벌레",
@@ -575,6 +575,10 @@ async def predict(
 
         contents = await file.read()
 
+        import hashlib
+        print("📦 RECEIVED BYTES :", len(contents))
+        print("🔐 RECEIVED SHA256 :", hashlib.sha256(contents).hexdigest())
+
         img = cv2.imdecode(
             np.frombuffer(contents, np.uint8),
             cv2.IMREAD_COLOR
@@ -598,6 +602,18 @@ async def predict(
         print("✅ IMAGE DECODE SUCCESS")
 
         original_img = img.copy()
+
+        # ?? ?? ?? ??? ?? ??? ??
+        debug_dir = os.path.join(os.path.dirname(__file__), "debug_images")
+        os.makedirs(debug_dir, exist_ok=True)
+
+        debug_path = os.path.join(
+            debug_dir,
+            f"received_{int(time.time() * 1000)}.jpg"
+        )
+
+        cv2.imwrite(debug_path, original_img)
+        print("?? DEBUG IMAGE SAVED :", debug_path)
 
         h, w = img.shape[:2]
 
@@ -833,6 +849,28 @@ async def predict(
 
         confidence = best_score
 
+        # 🌶️ PEPPER BASE MODEL DEBUG
+        if crop == "고추":
+            print("------------------------------")
+            print("🌶️ PEPPER BASE MODEL")
+            print(
+                "고추_정상     :",
+                f"{float(all_probs[0]) * 100:.2f}%"
+            )
+            print(
+                "고추_탄저병   :",
+                f"{float(all_probs[1]) * 100:.2f}%"
+            )
+            print(
+                "선택 클래스   :",
+                CLASS_NAMES[cls_id]
+            )
+            print(
+                "선택 확률     :",
+                f"{confidence * 100:.2f}%"
+            )
+            print("------------------------------")
+
         disease = CLASS_NAMES[cls_id]
 
         if crop == "":
@@ -1016,12 +1054,12 @@ async def predict(
                 if not disease.startswith(crop):
                     crop_match = False
 
-        # =====================
         # =========================
-        # PEPPER A7/A8 DISEASE PRIORITY
+        # PEPPER A7/A8 DISEASE SUPPORT
         # =========================
         if crop == "고추" and "pepper_disease_detections" in locals():
             if pepper_disease_detections:
+
                 best_disease_yolo = max(
                     pepper_disease_detections,
                     key=lambda x: x["confidence"]
@@ -1030,19 +1068,76 @@ async def predict(
                 a7a8_name = best_disease_yolo["name"]
                 a7a8_confidence = best_disease_yolo["confidence"] / 100.0
 
-                disease = a7a8_name
-                confidence = a7a8_confidence
-
                 print(
-                    "🌶️ A7/A8 DISEASE PRIORITY :",
-                    disease
+                    "🌶️ A7/A8 DISEASE SUPPORT :",
+                    a7a8_name
                 )
 
                 print(
                     "A7/A8 DISEASE CONF : ",
-                    round(confidence * 100, 2)
+                    round(a7a8_confidence * 100, 2)
                 )
 
+                # 기본 18종 모델이 고추 정상으로 판단한 경우
+                # A7/A8 단독 결과로 질병을 확정하지 않는다.
+                if disease == "고추_정상":
+
+                    print(
+                        "🌶️ A7/A8 BLOCKED : BASE MODEL = 고추_정상"
+                    )
+
+                else:
+
+                    base_disease_confidence = confidence
+
+                    base_name_normalized = disease.replace("고추_", "", 1).replace("고추", "", 1)
+                    a7a8_name_normalized = a7a8_name.replace("고추_", "", 1).replace("고추", "", 1)
+
+                    if (
+                        base_disease_confidence >= 0.40
+                        and base_name_normalized == a7a8_name_normalized
+                    ):
+
+                      # A7/A8은 보조 참고만 사용하고
+                      # 최종 disease/confidence는 기본 모델 결과 유지
+
+                        print(
+                            "🌶️ A7/A8 AGREEMENT :",
+                            disease
+                        )
+
+                    elif (
+                        base_disease_confidence < 0.40
+                        and base_name_normalized == a7a8_name_normalized
+                    ):
+
+                        print(
+                            "🌶️ A7/A8 BLOCKED : BASE CONF BELOW 40% :",
+                            round(base_disease_confidence * 100, 2),
+                            "%",
+                            "/ A7/A8 =",
+                            round(a7a8_confidence * 100, 2),
+                            "%"
+                        )
+
+                    else:
+
+                        print(
+                            "🌶️ A7/A8 DISAGREEMENT :",
+                            "BASE =",
+                            disease,
+                            "/ A7/A8 =",
+                            a7a8_name
+                        )
+
+        print(
+            "FINAL BEFORE CONFIDENCE CHECK :",
+            disease,
+            "| CONF =",
+            confidence,
+            "| CLS_ID =",
+            cls_id
+        )
 
         # CONFIDENCE 보정
         # =====================
@@ -1421,8 +1516,3 @@ if __name__ == "__main__":
         port=8000,
         reload=False
     )
-
-
-
-
-
