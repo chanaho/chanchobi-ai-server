@@ -755,7 +755,31 @@ async def predict(
         # 선택 작물과 실제 예측 작물 비교
         # =====================
 
-        crop_match = True
+        crop_match = True        
+        # =====================
+        # AI 미지원 작물 선차단
+        # =====================
+        supported_ai_crops = ["고추", "블랙커런트", "블루베리", "사과", "아로니아", "자두"]
+
+        if crop and crop not in supported_ai_crops:
+            print("⛔ AI UNSUPPORTED CROP :", crop)
+
+            return {
+                "success": True,
+                "crop": crop,
+                "disease": "AI 진단 지원 작물 아님",
+                "confidence": 0,
+                "risk": "UNKNOWN",
+                "crop_match": True,
+                "info": None,
+                "pest": None,
+                "pest_confidence": 0,
+                "pest_info": None,
+                "pest_risk": "UNKNOWN",
+                "time": elapsed,
+                "error": "현재 AI 진단 지원 범위에 포함되지 않는 작물입니다."
+            }
+
 
         if crop and predicted_crop:
 
@@ -1528,3 +1552,4 @@ if __name__ == "__main__":
         port=8000,
         reload=False
     )
+
