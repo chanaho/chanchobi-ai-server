@@ -20,6 +20,10 @@ import cv2
 import numpy as np
 
 from services.disease_db import get_disease_info
+from services.psis_api import (
+    search_psis_pesticides,
+    get_psis_pesticide_detail
+)
 
 cv2.setNumThreads(1)
 
@@ -1487,7 +1491,291 @@ async def predict(
             risk
         )
 
+        # =====================
+        # PSIS 공식 농약등록정보 조회
+        # =====================
 
+        psis_disease = {
+            "status": "NOT_SEARCHED",
+            "items": []
+        }
+
+        psis_pest = {
+            "status": "NOT_SEARCHED",
+            "items": []
+        }
+
+        try:
+
+            # ---------------------
+            # 병해 PSIS 조회
+            # ---------------------
+
+            if disease_info:
+
+                psis_disease_name = disease_info.get(
+                    "name",
+                    ""
+                )
+
+                if psis_disease_name:
+
+                    psis_disease = search_psis_pesticides(
+                        "고추",
+                        psis_disease_name
+                    )
+
+            # ---------------------
+            # 해충 PSIS 조회
+            # ---------------------
+
+            if pest_info:
+
+                psis_pest_name = pest_info.get(
+                    "name",
+                    ""
+                )
+
+                if psis_pest_name:
+
+                    psis_pest = search_psis_pesticides(
+                        "고추",
+                        psis_pest_name
+                    )
+
+        except Exception as e:
+
+            print(
+                "PSIS INTEGRATION ERROR:",
+                e
+            )
+
+            psis_disease = {
+                "status": "ERROR",
+                "items": []
+            }
+
+            psis_pest = {
+                "status": "ERROR",
+                "items": []
+            }
+
+        print(
+            "PSIS DISEASE:",
+            psis_disease.get("status"),
+            "| COUNT:",
+            len(psis_disease.get("items", []))
+        )
+
+        print(
+            "PSIS PEST:",
+            psis_pest.get("status"),
+            "| COUNT:",
+            len(psis_pest.get("items", []))
+        )
+
+        # =====================
+        # PSIS 농약정보 앱 표시용 정리
+        # =====================
+
+        psis_disease_pesticides = []
+
+        for item in psis_disease.get("items", []):
+
+            psis_disease_pesticides.append({
+
+                "pestiCode": item.get(
+                    "pestiCode",
+                    ""
+                ),
+
+                "diseaseUseSeq": item.get(
+                    "diseaseUseSeq",
+                    ""
+                ),
+
+                "pestiKorName": item.get(
+                    "pestiKorName",
+                    ""
+                ),
+
+                "pestiBrandName": item.get(
+                    "pestiBrandName",
+                    ""
+                ),
+
+                "compName": item.get(
+                    "compName",
+                    ""
+                ),
+
+                "cropName": item.get(
+                    "cropName",
+                    ""
+                ),
+
+                "diseaseWeedName": item.get(
+                    "diseaseWeedName",
+                    ""
+                ),
+
+                "useName": item.get(
+                    "useName",
+                    ""
+                ),
+
+                "pestiUse": item.get(
+                    "pestiUse",
+                    ""
+                ),
+
+                "dilutUnit": item.get(
+                    "dilutUnit",
+                    ""
+                ),
+
+                "useSuittime": item.get(
+                    "useSuittime",
+                    ""
+                ),
+
+                "useNum": item.get(
+                    "useNum",
+                    ""
+                )
+            })
+
+
+        psis_pest_pesticides = []
+
+        for item in psis_pest.get("items", []):
+
+            psis_pest_pesticides.append({
+
+                "pestiCode": item.get(
+                    "pestiCode",
+                    ""
+                ),
+
+                "diseaseUseSeq": item.get(
+                    "diseaseUseSeq",
+                    ""
+                ),
+
+                "pestiKorName": item.get(
+                    "pestiKorName",
+                    ""
+                ),
+
+                "pestiBrandName": item.get(
+                    "pestiBrandName",
+                    ""
+                ),
+
+                "compName": item.get(
+                    "compName",
+                    ""
+                ),
+
+                "cropName": item.get(
+                    "cropName",
+                    ""
+                ),
+
+                "diseaseWeedName": item.get(
+                    "diseaseWeedName",
+                    ""
+                ),
+
+                "useName": item.get(
+                    "useName",
+                    ""
+                ),
+
+                "pestiUse": item.get(
+                    "pestiUse",
+                    ""
+                ),
+
+                "dilutUnit": item.get(
+                    "dilutUnit",
+                    ""
+                ),
+
+                "useSuittime": item.get(
+                    "useSuittime",
+                    ""
+                ),
+
+                "useNum": item.get(
+                    "useNum",
+                    ""
+                )
+            })
+
+
+        print(
+            "PSIS DISEASE APP ITEMS:",
+            len(psis_disease_pesticides)
+        )
+
+        print(
+            "PSIS PEST APP ITEMS:",
+            len(psis_pest_pesticides)
+        )
+
+        # =====================
+        # PSIS 첫 번째 농약 상세정보 조회
+        # =====================
+
+        psis_disease_detail = {
+            "status": "NOT_SEARCHED",
+            "item": None
+        }
+
+        try:
+
+            disease_items = psis_disease.get(
+                "items",
+                []
+            )
+
+            if disease_items:
+
+                first_pesticide = disease_items[0]
+
+                pesti_code = first_pesticide.get(
+                    "pestiCode"
+                )
+
+                disease_use_seq = first_pesticide.get(
+                    "diseaseUseSeq"
+                )
+
+                if pesti_code and disease_use_seq:
+
+                    psis_disease_detail = get_psis_pesticide_detail(
+                        pesti_code,
+                        disease_use_seq
+                    )
+
+        except Exception as e:
+
+            print(
+                "PSIS DETAIL INTEGRATION ERROR:",
+                e
+            )
+
+            psis_disease_detail = {
+                "status": "ERROR",
+                "item": None
+            }
+
+        print(
+            "PSIS DISEASE DETAIL:",
+            psis_disease_detail.get("status")
+        )
+        
         # =====================
         # FIREBASE SEARCH NAME
         # =====================
@@ -1517,20 +1805,32 @@ async def predict(
             "pest_confidence": round(
                 pepper_yolo_confidence * 100,
                 2
-            ) if pepper_yolo_found else 0,
+           ) if pepper_yolo_found else 0,
+
             "pest_info": pest_info,
             "pest_risk": pest_risk,
+
+            # =========================
+            # PSIS 공식 농약등록정보
+            # =========================
+            "psis_disease": psis_disease,
+            "psis_disease_detail": psis_disease_detail,
+            "psis_disease_pesticides": psis_disease_pesticides,
+
+            "psis_pest": psis_pest,
+            "psis_pest_pesticides": psis_pest_pesticides,
+
             "time": elapsed
         }
 
     except Exception as e:
-
+    
         print(
             "🔥 ERROR:",
             e
         )
 
-        traceback.print_exc()
+        traceback.print_exc()       
 
         return {
             "success": False,
@@ -1539,7 +1839,7 @@ async def predict(
             "confidence": 0,
             "risk": "UNKNOWN",
             "error": str(e)
-        }
+        }            
 
 
 if __name__ == "__main__":
