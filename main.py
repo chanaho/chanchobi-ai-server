@@ -561,10 +561,16 @@ def health():
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
-    crop: str = Form(None)
+    crop: str = Form(None),
+    weather_temp: str = Form(None),
+    weather_humidity: str = Form(None),
+    weather_wind: str = Form(None)
 ):
 
     print("🔥 PREDICT START")
+    print("WEATHER TEMP :", weather_temp)
+    print("WEATHER HUMIDITY :", weather_humidity)
+    print("WEATHER WIND :", weather_wind)
 
     try:
 
