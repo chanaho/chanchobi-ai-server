@@ -769,7 +769,7 @@ async def predict(
         # =====================
         # AI 미지원 작물 선차단
         # =====================
-        supported_ai_crops = ["고추", "블랙커런트", "블루베리", "사과", "아로니아", "자두"]
+        supported_ai_crops = ["고추", "블랙커런트", "블루베리", "사과", "아로니아", "자두","한라봉"]
 
         if crop and crop not in supported_ai_crops:
             print("⛔ AI UNSUPPORTED CROP :", crop)
@@ -1527,7 +1527,7 @@ async def predict(
                 if psis_disease_name:
 
                     psis_disease = search_psis_pesticides(
-                        "고추",
+                        crop,
                         psis_disease_name
                     )
 
@@ -1545,7 +1545,7 @@ async def predict(
                 if psis_pest_name:
 
                     psis_pest = search_psis_pesticides(
-                        "고추",
+                        crop,
                         psis_pest_name
                     )
 
