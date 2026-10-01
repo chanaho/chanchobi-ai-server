@@ -22,9 +22,9 @@ import numpy as np
 from services.disease_db import get_disease_info
 from services.psis_api import (
     search_psis_pesticides,
-    get_psis_pesticide_detail
+    get_psis_pesticide_detail,
+    load_local_psis_pesticides
 )
-
 cv2.setNumThreads(1)
 
 app = FastAPI()
@@ -1526,7 +1526,8 @@ async def predict(
 
                 if psis_disease_name:
 
-                    psis_disease = search_psis_pesticides(
+                    # 로컬에 확보된 농촌진흥청 공식 등록정보 우선 조회
+                    psis_disease = load_local_psis_pesticides(
                         crop,
                         psis_disease_name
                     )
@@ -1544,7 +1545,8 @@ async def predict(
 
                 if psis_pest_name:
 
-                    psis_pest = search_psis_pesticides(
+                    # 로컬에 확보된 농촌진흥청 공식 등록정보 우선 조회
+                    psis_pest = load_local_psis_pesticides(
                         crop,
                         psis_pest_name
                     )
@@ -1858,4 +1860,6 @@ if __name__ == "__main__":
         port=8000,
         reload=False
     )
+
+
 

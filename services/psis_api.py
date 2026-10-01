@@ -3,19 +3,19 @@ import requests
 import xml.etree.ElementTree as ET
 
 
-PSIS_URL = "https://psis.rda.go.kr/openApi/service.do"
+PSIS_URL = "http://psis.rda.go.kr/openApi/service.do"
 
 
 def _local_name(tag):
     """
-    XML namespace가 ?�어???�그 ?�름�?추출
+    XML namespace가 있어도 태그 이름만 추출
     """
     return tag.split("}", 1)[-1]
 
 
 def _get_child_text(element, name):
     """
-    XML item ?�에??지?�된 ?�드??값을 가?�옴
+    XML item 안에서 지정된 필드의 값을 가져옴
     """
     for child in list(element):
         if _local_name(child.tag) == name:
@@ -56,15 +56,15 @@ def search_psis_pesticides(
 
         "startPoint": 1,
 
-        # ?�물�??�확???�치
+        # 작물명 정확히 일치
         "cropName": crop_name,
 
         "cropCheck": "Y",
 
-        # ?�용 병해�?
+        # 적용 병해충
         "diseaseWeedName": disease_pest_name,
 
-        # ?�사 병해�?검?�하지 ?�음
+        # 유사 병해충 검색하지 않음
         "similarFlag": "N"
     }
 
@@ -86,7 +86,7 @@ def search_psis_pesticides(
 
 
         # =========================
-        # XML ?�싱
+        # XML 파싱
         # =========================
 
         root = ET.fromstring(
@@ -97,7 +97,7 @@ def search_psis_pesticides(
         items = []
 
 
-        # XML ?��???모든 item 검??
+        # XML 내부의 모든 item 검색
         for element in root.iter():
 
             if _local_name(element.tag) != "item":
@@ -222,7 +222,7 @@ def search_psis_pesticides(
             }
 
 
-            # ?�제 ?�이?��? ?�는 item�?추�?
+            # 실제 데이터가 있는 item만 추가
             if any(row.values()):
 
                 items.append(
@@ -231,7 +231,7 @@ def search_psis_pesticides(
 
 
         # =========================
-        # 결과 ?�인
+        # 결과 확인
         # =========================
 
         if items:
@@ -248,7 +248,7 @@ def search_psis_pesticides(
 
 
         # =========================
-        # 결과 ?�음 / ?�류 메시지 ?�인
+        # 결과 없음 / 오류 메시지 확인
         # =========================
 
         result_code = ""
@@ -360,7 +360,7 @@ def search_psis_pesticides(
             "items": []
         }
 # =========================
-# PSIS ?�약 ?�세?�보 조회
+# PSIS 농약 상세정보 조회
 # =========================
 def get_psis_pesticide_detail(pesti_code, disease_use_seq):
     api_key = os.getenv("PSIS_API_KEY")
@@ -396,8 +396,8 @@ def get_psis_pesticide_detail(pesti_code, disease_use_seq):
 
         root = ET.fromstring(response.content)
 
-        # SVC02??<item>???�니??
-        # <service> 바로 ?�래???�세 ?�드가 반환??
+        # SVC02는 <item>이 아니라
+        # <service> 바로 아래에 상세 필드가 반환됨
         item = {
             "pestiKorName": _get_child_text(
                 root,
@@ -461,7 +461,7 @@ def get_psis_pesticide_detail(pesti_code, disease_use_seq):
             )
         }
 
-        # ?�제 ?�이?��? ?�나?�도 ?�으�??�상
+        # 실제 데이터가 하나라도 있으면 정상
         if any(item.values()):
             print("PSIS DETAIL RESULT: OK")
 
@@ -509,3 +509,112 @@ def get_psis_pesticide_detail(pesti_code, disease_use_seq):
             "status": "ERROR",
             "item": None
         }
+# ==============================
+# PSIS LOCAL OFFICIAL DB
+# ==============================
+
+import json
+from pathlib import Path
+
+
+PSIS_LOCAL_DB_DIR = (
+    Path(__file__).resolve().parent.parent / "psis_db"
+)
+
+
+def load_local_psis_pesticides(
+    crop_name,
+    disease_pest_name
+):
+    """
+    PSIS에서 미리 확보한 공식 등록정보를
+    로컬 JSON DB에서 조회한다.
+
+    실시간 PSIS 접속이 필요하지 않다.
+    """
+
+    if not crop_name or not disease_pest_name:
+        return {
+            "status": "INVALID_PARAMETER",
+            "items": []
+        }
+
+    crop = str(crop_name).strip()
+    target = str(disease_pest_name).strip()
+
+    if not PSIS_LOCAL_DB_DIR.exists():
+        print(
+            "PSIS LOCAL DB DIR NOT FOUND:",
+            PSIS_LOCAL_DB_DIR
+        )
+
+        return {
+            "status": "DB_NOT_FOUND",
+            "items": []
+        }
+
+    items = []
+
+    for db_file in PSIS_LOCAL_DB_DIR.glob("*.json"):
+
+        try:
+
+            with open(
+                db_file,
+                "r",
+                encoding="utf-8"
+            ) as f:
+
+                data = json.load(f)
+
+            if not isinstance(data, list):
+                continue
+
+            for item in data:
+
+                item_crop = str(
+                    item.get("cropName", "")
+                ).strip()
+
+                item_target = str(
+                    item.get("diseaseWeedName", "")
+                ).strip()
+
+                if (
+                    item_crop == crop
+                    and item_target == target
+                ):
+                    items.append(item)
+
+        except Exception as e:
+
+            print(
+                "PSIS LOCAL DB READ ERROR:",
+                db_file,
+                e
+            )
+
+    if items:
+
+        print(
+            "PSIS LOCAL DB RESULT:",
+            crop,
+            target,
+            len(items)
+        )
+
+        return {
+            "status": "OK",
+            "items": items
+        }
+
+    print(
+        "PSIS LOCAL DB NO RESULT:",
+        crop,
+        target
+    )
+
+    return {
+        "status": "NO_RESULT",
+        "items": []
+    }
