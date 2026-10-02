@@ -3,7 +3,7 @@ import requests
 import xml.etree.ElementTree as ET
 
 
-PSIS_URL = "http://psis.rda.go.kr/openApi/service.do"
+PSIS_URL = "https://psis.rda.go.kr/openApi/service.do"
 
 
 def _local_name(tag):
